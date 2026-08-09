@@ -1,0 +1,7 @@
+apiVersion: v2
+name: reliability-demo
+description: Fault-injectable demo service for GitOps and reliability exercises
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+icon: https://kubernetes.io/images/favicon.png

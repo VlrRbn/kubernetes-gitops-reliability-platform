@@ -1,0 +1,12 @@
+replicaCount: 1
+
+image:
+  repository: reliability-demo
+  tag: dev
+  digest: ""
+  pullPolicy: IfNotPresent
+
+fault:
+  delayMilliseconds: 0
+  errorRate: 0
+  ready: true

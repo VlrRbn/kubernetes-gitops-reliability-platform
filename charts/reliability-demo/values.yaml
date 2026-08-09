@@ -1,0 +1,41 @@
+replicaCount: 1
+
+image:
+  repository: reliability-demo
+  tag: dev
+  digest: ""
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+containerPort: 8080
+
+fault:
+  delayMilliseconds: 0
+  errorRate: 0
+  ready: true
+
+probes:
+  liveness:
+    initialDelaySeconds: 2
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 1
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 2
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    cpu: 200m
+    memory: 64Mi
+
+podAnnotations: {}
+podLabels: {}

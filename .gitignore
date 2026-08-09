@@ -1,0 +1,12 @@
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+bin/
+coverage.out
+*.log
+
+.env
+*.local.yaml
