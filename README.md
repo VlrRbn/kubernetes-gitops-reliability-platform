@@ -102,8 +102,8 @@ placeholders; they do not yet represent a promoted immutable image.
 | Capability | Status |
 | --- | --- |
 | Local Kubernetes deployment | Complete |
-| GHCR image pipeline | Implemented; CI evidence pending |
-| SPDX JSON SBOM generation | Implemented; CI evidence pending |
+| GHCR image pipeline | Complete |
+| SPDX JSON SBOM generation | Complete |
 | Argo CD promotion | Planned |
 | Admission policies | Planned |
 | Signed build provenance | Planned |

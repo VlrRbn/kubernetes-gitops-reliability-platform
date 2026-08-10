@@ -29,6 +29,22 @@ permissions. All referenced actions use full commit SHAs with reviewed version c
   the exact scanned bytes into the isolated publish job.
 - The final GHCR digest is written to the workflow summary.
 
+Verified evidence from 2026-08-10:
+
+- [pull-request validation](https://github.com/VlrRbn/kubernetes-gitops-reliability-platform/actions/runs/31383846632)
+  completed the checks, vulnerability scan, and SBOM generation without publishing;
+- [main publication](https://github.com/VlrRbn/kubernetes-gitops-reliability-platform/actions/runs/31384026828)
+  published the reviewed archive with no workflow annotations;
+- commit `96201f3b7aca24bd6781889911588f10a63c0a17` produced public image tag
+  `sha-96201f3b7aca24bd6781889911588f10a63c0a17`;
+- the registry returned digest
+  `sha256:2b3fb9dd442fe6fc24ff9b3c47f7678cf5593f5fdf9b123b74b83cbac557e8d7`;
+- `main` requires both `Application and chart checks` and `Build, scan, and inventory image`,
+  with strict branch updates, linear history, admin enforcement, and no force-push or branch deletion.
+
+The workflow run and immutable GHCR identity remain useful evidence after the
+short-lived workflow artifacts expire.
+
 ## Local Contract Test
 
 ```bash
