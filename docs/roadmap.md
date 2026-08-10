@@ -6,7 +6,7 @@ requests, releases, and README sections use capability names instead.
 | Public capability | Planned release | State |
 | --- | --- | --- |
 | Local Kubernetes Foundation | `v0.1.0` | Complete locally |
-| Secure Image Pipeline | `v0.2.0` | Planned |
+| Secure Image Pipeline | `v0.2.0` | Implemented; CI evidence pending |
 | GitOps Promotion | `v0.3.0` | Planned |
 | Admission Policy | `v0.4.0` | Planned |
 | Supply Chain Provenance | `v0.5.0` | Planned |

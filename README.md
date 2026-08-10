@@ -7,7 +7,8 @@ images, admission policy, telemetry, SLOs, and incident recovery evidence.
 ## Project Status
 
 The **Local Kubernetes Foundation** is complete and proves a vertical slice
-without cloud infrastructure:
+without cloud infrastructure. The **Secure Image Pipeline** adds pull-request
+evidence and controlled GHCR publication:
 
 ```text
 Go service
@@ -29,6 +30,17 @@ exercises:
 
 Invalid values fail closed during startup and through Helm schema validation.
 
+## Secure Image Pipeline
+
+Every pull request runs the project checks, builds the image, blocks on
+`HIGH`/`CRITICAL` Trivy findings, and generates an SPDX JSON SBOM.
+A separate job publishes the exact reviewed image only after the commit reaches `main`.
+Images use `sha-<full-commit-sha>` tags; the pipeline does not publish `latest`.
+
+The publish job alone receives `packages: write`. GitHub Actions, Go, Helm,
+Trivy, and Syft versions are pinned. See `docs/secure-image-pipeline.md`
+for the delivery contract and its explicit supply-chain boundary.
+
 ## Security Defaults
 
 - exact digest for the Go builder image;
@@ -48,7 +60,7 @@ Docker
 kubectl
 kind
 Helm 3 or newer
-Go 1.24+ or Docker for Go checks
+Go 1.26+ or Docker for Go checks
 curl
 ```
 
@@ -90,18 +102,20 @@ placeholders; they do not yet represent a promoted immutable image.
 | Capability | Status |
 | --- | --- |
 | Local Kubernetes deployment | Complete |
-| GHCR image pipeline | Planned |
+| GHCR image pipeline | Implemented; CI evidence pending |
+| SPDX JSON SBOM generation | Implemented; CI evidence pending |
 | Argo CD promotion | Planned |
 | Admission policies | Planned |
-| Build provenance and SBOM | Planned |
+| Signed build provenance | Planned |
 | Observability and SLOs | Planned |
 | Incident exercises | Planned |
 
-See `docs/local-foundation-acceptance.md` for the completed acceptance contract
-and `docs/roadmap.md` for the internal milestone map.
+See `docs/local-foundation-acceptance.md` for the completed local contract,
+`docs/secure-image-pipeline.md` for the image delivery contract, and
+`docs/roadmap.md` for the internal milestone map.
 
 ## Safety Boundary
 
-The local demo creates and deletes only a kind cluster named
-`gitops-reliability`. It does not create GitHub repositories, push images,
-access AWS, or deploy cloud infrastructure.
+The local demo creates and deletes only a kind cluster named `gitops-reliability`;
+it does not push images, access AWS, or deploy cloud infrastructure.
+GHCR publication happens only in GitHub Actions after a commit reaches `main`.
