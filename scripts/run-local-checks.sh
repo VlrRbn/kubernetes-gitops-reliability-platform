@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-GO_IMAGE="golang:1.24.6-alpine3.22@sha256:c8c5f95d64aa79b6547f3b626eb84b16a7ce18a139e3e9ca19a8c078b85ba80d"
+GO_IMAGE="golang:1.26.5-alpine3.23@sha256:622e56dbc11a8cfe87cafa2331e9a201877271cbff918af53d3be315f3da88cc"
 RENDER_DIR="$(mktemp -d)"
 trap 'rm -rf "$RENDER_DIR"' EXIT
 
@@ -53,6 +53,7 @@ for env in dev stage prod; do
 done
 
 "${SCRIPT_DIR}/test-chart-guardrails.sh"
+"${SCRIPT_DIR}/test-workflow-guardrails.sh"
 
 for script in "${SCRIPT_DIR}"/*.sh; do
   bash -n "$script"
