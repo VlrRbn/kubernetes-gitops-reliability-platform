@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: reliability-platform
+  namespace: argocd
+spec:
+  description: Restricted project for the reliability demo environments
+  sourceRepos:
+    - https://github.com/VlrRbn/kubernetes-gitops-reliability-platform.git
+  destinations:
+    - namespace: dev
+      server: https://kubernetes.default.svc
+    - namespace: stage
+      server: https://kubernetes.default.svc
+    - namespace: prod
+      server: https://kubernetes.default.svc
+  clusterResourceBlacklist:
+    - group: "*"
+      kind: "*"
+  namespaceResourceWhitelist:
+    - group: apps
+      kind: Deployment
+    - group: ""
+      kind: Service
+  orphanedResources:
+    warn: true

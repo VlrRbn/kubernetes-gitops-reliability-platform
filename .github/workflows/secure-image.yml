@@ -43,6 +43,9 @@ jobs:
       - name: Run project checks
         run: make check
 
+      - name: Verify immutable environment images
+        run: ./scripts/verify-environment-images.sh
+
   image:
     name: Build, scan, and inventory image
     needs: checks
@@ -72,7 +75,7 @@ jobs:
           push: false
           tags: ${{ steps.image.outputs.ref }}
           build-args: |
-            VERSION=0.2.0
+            VERSION=sha-${{ github.sha }}
             COMMIT=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

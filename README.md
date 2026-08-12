@@ -41,6 +41,15 @@ The publish job alone receives `packages: write`. GitHub Actions, Go, Helm,
 Trivy, and Syft versions are pinned. See `docs/secure-image-pipeline.md`
 for the delivery contract and its explicit supply-chain boundary.
 
+## GitOps Promotion
+
+Argo CD reconciles digest-pinned Helm releases for `dev`, `stage`, and `prod`
+from protected `main`. Promotion resolves the public GHCR digest and enforces
+the order `dev → stage → prod`; each environment change remains a separate PR.
+The restricted AppProject denies cluster-scoped resources and permits only the
+chart's `Deployment` and `Service` resources. See
+`docs/gitops-promotion.md` for bootstrap, promotion, and deletion trade-offs.
+
 ## Security Defaults
 
 - exact digest for the Go builder image;
@@ -81,8 +90,8 @@ make local-demo
 Inspect the deployment:
 
 ```bash
-kubectl get pods,service,deployment -n dev
-kubectl describe deployment reliability-demo -n dev
+kubectl get pods,service,deployment -n local-dev
+kubectl describe deployment reliability-demo -n local-dev
 ```
 
 Delete only the disposable local cluster:
@@ -94,8 +103,9 @@ make cluster-delete
 ## Environment Values
 
 Environment-specific values live under `gitops/environments/`. The Local
-Kubernetes Foundation deploys only `dev`. Stage and prod values are render-tested
-placeholders; they do not yet represent a promoted immutable image.
+Kubernetes Foundation deploys to the separate `local-dev` namespace. Argo CD
+exclusively owns `dev`, `stage`, and `prod`; their values contain real
+digest-pinned GHCR images.
 
 ## Capability Status
 
@@ -104,7 +114,7 @@ placeholders; they do not yet represent a promoted immutable image.
 | Local Kubernetes deployment | Complete |
 | GHCR image pipeline | Complete |
 | SPDX JSON SBOM generation | Complete |
-| Argo CD promotion | Planned |
+| Argo CD promotion | Implemented; cluster evidence pending |
 | Admission policies | Planned |
 | Signed build provenance | Planned |
 | Observability and SLOs | Planned |

@@ -1,8 +1,11 @@
 # GitOps Configuration
 
-The Local Kubernetes Foundation stores environment-specific Helm values here,
-but deploys only `dev` directly. The Secure Image Pipeline publishes immutable
-GHCR images after changes reach `main`; the following capability will add Argo
-CD Applications and digest-based promotion. The placeholder stage/prod tags
-are not deployable release evidence and must not be presented as immutable
-promotion.
+Environment values contain both the immutable GHCR tag and its registry digest.
+Argo CD renders the chart with the digest, while the tag preserves the source
+commit identity for operators. The promotion helper advances one published
+identity through `dev`, `stage`, and `prod`; stage/prod cannot skip their source
+environment. CI independently resolves every tag and rejects digest mismatch.
+
+The local Helm demo deploys into `local-dev`, overrides the image, and clears
+its digest explicitly. It does not share resources with the Argo-managed
+environment contract.
