@@ -11,5 +11,6 @@ The foundation is complete when all of the following are demonstrated locally:
 - Rendered manifests disable service-account token mounting, privilege
   escalation, writable root filesystems, and Linux capabilities.
 - A kind cluster accepts the locally built image.
-- Helm deploys the dev release and waits for readiness.
+- Helm deploys the `local-dev` release and waits for readiness without
+  competing with Argo-managed environments.
 - The smoke test reaches `/`, `/healthz`, `/readyz`, and `/metrics`.

@@ -1,9 +1,9 @@
 replicaCount: 2
 
 image:
-  repository: ghcr.io/vlrrbn/reliability-demo
-  tag: stage-placeholder
-  digest: ""
+  repository: ghcr.io/vlrrbn/kubernetes-gitops-reliability-platform
+  tag: sha-96201f3b7aca24bd6781889911588f10a63c0a17
+  digest: sha256:2b3fb9dd442fe6fc24ff9b3c47f7678cf5593f5fdf9b123b74b83cbac557e8d7
   pullPolicy: IfNotPresent
 
 fault:

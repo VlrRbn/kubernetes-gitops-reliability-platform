@@ -46,10 +46,18 @@ require_literal '          upload-release-assets: false' "SBOM release upload mu
 require_literal '          echo "ref=ghcr.io/${repository}:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"' \
   "Container images must use the full immutable commit SHA tag"
 require_literal '          push: false' "The build job must not publish before security review"
+# The validator must match the GitHub Actions expression literally.
+# shellcheck disable=SC2016
+require_literal '            VERSION=sha-${{ github.sha }}' \
+  "Image version metadata must use the full commit SHA"
 # The validator must match the shell command literally without executing it.
 # shellcheck disable=SC2016
 require_literal '          push_output="$(docker push "$IMAGE_REF")"' \
   "The isolated publish job must push the reviewed image"
+require_literal "      - name: Verify immutable environment images" \
+  "CI must verify every environment image against GHCR"
+require_literal "        run: ./scripts/verify-environment-images.sh" \
+  "CI must run immutable environment image verification"
 
 grep -Eq '(^|[^[:alnum:]_-])latest([^[:alnum:]_-]|$)' "$WORKFLOW" &&
   fail "Mutable latest image references are forbidden"

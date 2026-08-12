@@ -1,0 +1,53 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: reliability-demo-environments
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - list:
+        elements:
+          - environment: dev
+          - environment: stage
+          - environment: prod
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  template:
+    metadata:
+      name: reliability-demo-{{ .environment }}
+      labels:
+        app.kubernetes.io/part-of: reliability-platform
+        reliability.platform/environment: "{{ .environment }}"
+    spec:
+      project: reliability-platform
+      sources:
+        - repoURL: https://github.com/VlrRbn/kubernetes-gitops-reliability-platform.git
+          targetRevision: main
+          path: charts/reliability-demo
+          helm:
+            releaseName: reliability-demo
+            valueFiles:
+              - $values/gitops/environments/{{ .environment }}/values.yaml
+        - repoURL: https://github.com/VlrRbn/kubernetes-gitops-reliability-platform.git
+          targetRevision: main
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ .environment }}"
+      syncPolicy:
+        automated:
+          allowEmpty: false
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - PruneLast=true
+          - PrunePropagationPolicy=foreground
+        retry:
+          limit: 3
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 1m

@@ -79,4 +79,22 @@ expect_rejected \
   "${TEST_DIR}/missing-pr.yml" \
   "Pull request checks are required"
 
+cp "$WORKFLOW" "${TEST_DIR}/missing-image-verification.yml"
+sed -i '\|run: ./scripts/verify-environment-images\.sh|d' \
+  "${TEST_DIR}/missing-image-verification.yml"
+expect_rejected \
+  "missing environment image verification" \
+  "${TEST_DIR}/missing-image-verification.yml" \
+  "CI must run immutable environment image verification"
+
+cp "$WORKFLOW" "${TEST_DIR}/hardcoded-image-version.yml"
+# The mutation targets a literal GitHub Actions expression.
+# shellcheck disable=SC2016
+sed -i 's|VERSION=sha-${{ github\.sha }}|VERSION=0.2.0|' \
+  "${TEST_DIR}/hardcoded-image-version.yml"
+expect_rejected \
+  "hardcoded image version metadata" \
+  "${TEST_DIR}/hardcoded-image-version.yml" \
+  "Image version metadata must use the full commit SHA"
+
 echo "Workflow guardrail negative tests passed"
