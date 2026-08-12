@@ -55,6 +55,7 @@ argocd-bootstrap: cluster-create ## Install pinned Argo CD and apply the restric
 argocd-status: ## Show generated Applications and environment workloads
 	@kubectl get applications.argoproj.io -n argocd
 	@for namespace in dev stage prod; do \
+	  printf '\n[%s]\n' "$$namespace"; \
 	  kubectl get deployment,pod,service --namespace "$$namespace"; \
 	done
 
