@@ -114,7 +114,7 @@ digest-pinned GHCR images.
 | Local Kubernetes deployment | Complete |
 | GHCR image pipeline | Complete |
 | SPDX JSON SBOM generation | Complete |
-| Argo CD promotion | Implemented; cluster evidence pending |
+| Argo CD promotion | Complete |
 | Admission policies | Planned |
 | Signed build provenance | Planned |
 | Observability and SLOs | Planned |

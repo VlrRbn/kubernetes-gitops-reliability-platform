@@ -80,3 +80,30 @@ configured tag again and rejects a tag/digest mismatch before merge.
 Each environment is intentionally promoted in a separate PR. That makes the
 Git history the promotion audit trail and allows health evidence to be checked
 between environments.
+
+## Verified Promotion Evidence
+
+The complete chain was exercised on 2026-08-12 with source image commit
+`752506d83fcb9435c4245e1337edd3ce6adf27a1` and registry digest
+`sha256:ff919acbb4974a679b1816262acac0c8f2e7701a983e472da95a336cde9aa504`:
+
+1. [PR #6](https://github.com/VlrRbn/kubernetes-gitops-reliability-platform/pull/6)
+   promoted the image to dev. Argo reconciled merge commit
+   `3174f8650f6434e2f684d69fdee4df68daf9f3f7` to `Synced / Healthy` before
+   the dev smoke test passed.
+2. [PR #7](https://github.com/VlrRbn/kubernetes-gitops-reliability-platform/pull/7)
+   promoted the same tag and digest to stage. Argo reconciled merge commit
+   `0c9c25ca0984b61e1ce3ed0434d56a773dbd08c4` to `Synced / Healthy` before
+   the stage smoke test passed.
+3. [PR #8](https://github.com/VlrRbn/kubernetes-gitops-reliability-platform/pull/8)
+   promoted the same identity to prod. Argo reconciled merge commit
+   `6203e04ce20aa509bac6290118ae272bd7dae01a` to `Synced / Healthy` before
+   the prod smoke test passed.
+
+The [final main workflow](https://github.com/VlrRbn/kubernetes-gitops-reliability-platform/actions/runs/31605961036)
+completed all checks, image scanning, SBOM generation, and publication without annotations.
+Registry verification then confirmed the same immutable tag and digest in all three
+environment values, while the live Deployments referenced the repository by that digest.
+
+This evidence distinguishes the source image commit from the three promotion
+merge commits: promotion changes desired Git state but does not rebuild the image.
