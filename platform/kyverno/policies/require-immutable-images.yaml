@@ -1,0 +1,48 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-immutable-images
+  annotations:
+    policies.kyverno.io/title: Require immutable image digests
+    policies.kyverno.io/category: Supply Chain
+    policies.kyverno.io/severity: high
+spec:
+  background: true
+  webhookConfiguration:
+    failurePolicy: Fail
+  rules:
+    - name: require-sha256-digest
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - dev
+                - stage
+                - prod
+      validate:
+        failureAction: Enforce
+        message: Container images must use a full sha256 digest.
+        foreach:
+          - list: request.object.spec.containers
+            deny:
+              conditions:
+                all:
+                  - key: "{{ regex_match('^.+@sha256:[a-f0-9]{64}$', element.image) }}"
+                    operator: Equals
+                    value: false
+          - list: request.object.spec.initContainers || `[]`
+            deny:
+              conditions:
+                all:
+                  - key: "{{ regex_match('^.+@sha256:[a-f0-9]{64}$', element.image) }}"
+                    operator: Equals
+                    value: false
+          - list: request.object.spec.ephemeralContainers || `[]`
+            deny:
+              conditions:
+                all:
+                  - key: "{{ regex_match('^.+@sha256:[a-f0-9]{64}$', element.image) }}"
+                    operator: Equals
+                    value: false

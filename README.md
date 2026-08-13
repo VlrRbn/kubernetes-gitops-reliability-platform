@@ -6,15 +6,17 @@ images, admission policy, telemetry, SLOs, and incident recovery evidence.
 
 ## Project Status
 
-The **Local Kubernetes Foundation** is complete and proves a vertical slice
-without cloud infrastructure. The **Secure Image Pipeline** adds pull-request
-evidence and controlled GHCR publication:
+The **Local Kubernetes Foundation**, **Secure Image Pipeline**, **GitOps
+Promotion**, and **Admission Policy** capabilities are complete. Together they
+provide a local vertical slice, pull-request evidence, controlled GHCR
+publication, environment reconciliation, and enforceable workload controls
+without cloud infrastructure:
 
 ```text
 Go service
   -> hardened multi-stage container
   -> local kind image
-  -> Helm release in namespace dev
+  -> Helm release in namespace local-dev
   -> health/readiness/application/metrics smoke test
 ```
 
@@ -50,6 +52,15 @@ The restricted AppProject denies cluster-scoped resources and permits only the
 chart's `Deployment` and `Service` resources. See
 `docs/gitops-promotion.md` for bootstrap, promotion, and deletion trade-offs.
 
+## Admission Policy
+
+Kyverno rejects mutable image references and workloads that violate the
+Kubernetes restricted Pod Security Standard or use writable root filesystems
+in the Argo-managed environments. Kyverno `v1.18.2`, Helm chart `3.8.2`, its
+controller images, and the test CLI are pinned and verified. Bootstrap audits
+the live workloads before switching policies to `Enforce`; see
+`docs/admission-policy.md` for the contract and acceptance procedure.
+
 ## Security Defaults
 
 - exact digest for the Go builder image;
@@ -71,6 +82,7 @@ kind
 Helm 3 or newer
 Go 1.26+ or Docker for Go checks
 curl
+jq
 ```
 
 ## Run The Local Foundation
@@ -100,6 +112,55 @@ Delete only the disposable local cluster:
 make cluster-delete
 ```
 
+## Run The GitOps Platform
+
+The GitOps path is separate from `make local-demo`. Run the checks, create the
+kind cluster, and bootstrap Argo CD first:
+
+```bash
+make check
+make argocd-bootstrap
+```
+
+Wait until all three generated Applications report `Synced` and `Healthy`:
+
+```bash
+kubectl get applications --namespace argocd --watch
+```
+
+Stop the watch with `Ctrl+C`, then install Kyverno. The bootstrap first audits
+the existing `dev`, `stage`, and `prod` workloads and switches the policies to
+`Enforce` only when the audit has no violations:
+
+```bash
+make kyverno-bootstrap
+make admission-status
+```
+
+Confirm that Argo CD and all application environments remain healthy:
+
+```bash
+make argocd-status
+NAMESPACE=dev make smoke-test
+NAMESPACE=stage make smoke-test
+NAMESPACE=prod make smoke-test
+```
+
+The required order is:
+
+```text
+kind cluster
+  -> Argo CD
+  -> dev, stage, and prod workloads
+  -> Kyverno Audit
+  -> Kyverno Enforce
+```
+
+`make kyverno-bootstrap` intentionally fails if Argo CD has not yet created
+the three application namespaces.
+
+Delete the complete disposable platform with `make cluster-delete`.
+
 ## Environment Values
 
 Environment-specific values live under `gitops/environments/`. The Local
@@ -115,17 +176,19 @@ digest-pinned GHCR images.
 | GHCR image pipeline | Complete |
 | SPDX JSON SBOM generation | Complete |
 | Argo CD promotion | Complete |
-| Admission policies | Planned |
+| Admission policies | Complete |
 | Signed build provenance | Planned |
 | Observability and SLOs | Planned |
 | Incident exercises | Planned |
 
 See `docs/local-foundation-acceptance.md` for the completed local contract,
 `docs/secure-image-pipeline.md` for the image delivery contract, and
-`docs/roadmap.md` for the internal milestone map.
+`docs/gitops-promotion.md` and `docs/admission-policy.md` for the cluster
+delivery controls. `docs/roadmap.md` contains the internal milestone map.
 
 ## Safety Boundary
 
-The local demo creates and deletes only a kind cluster named `gitops-reliability`;
-it does not push images, access AWS, or deploy cloud infrastructure.
-GHCR publication happens only in GitHub Actions after a commit reaches `main`.
+The local demo and control-plane bootstraps operate only on a kind cluster named
+`gitops-reliability`; they do not push images, access AWS, or deploy cloud
+infrastructure. GHCR publication happens only in GitHub Actions after a commit
+reaches `main`.
