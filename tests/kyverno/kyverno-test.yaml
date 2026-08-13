@@ -1,0 +1,54 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: admission-policy-contract
+policies:
+  - ../../platform/kyverno/policies/require-immutable-images.yaml
+  - ../../platform/kyverno/policies/require-restricted-workloads.yaml
+resources:
+  - resources.yaml
+results:
+  - kind: Pod
+    policy: require-immutable-images
+    resources:
+      - compliant-pod
+    result: pass
+    rule: require-sha256-digest
+  - kind: Pod
+    policy: require-immutable-images
+    resources:
+      - mutable-image-pod
+    result: fail
+    rule: require-sha256-digest
+  - kind: Pod
+    policy: require-restricted-workloads
+    resources:
+      - compliant-pod
+      - mutable-image-pod
+      - writable-root-pod
+    result: pass
+    rule: require-restricted-pod-security
+  - kind: Pod
+    policy: require-restricted-workloads
+    resources:
+      - privileged-pod
+      - host-namespace-pod
+      - host-path-pod
+      - root-pod
+      - unsafe-security-context-pod
+    result: fail
+    rule: require-restricted-pod-security
+  - kind: Pod
+    policy: require-restricted-workloads
+    resources:
+      - compliant-pod
+      - mutable-image-pod
+      - privileged-pod
+    result: pass
+    rule: require-read-only-root-filesystem
+  - kind: Pod
+    policy: require-restricted-workloads
+    resources:
+      - writable-root-pod
+    result: fail
+    rule: require-read-only-root-filesystem

@@ -1,0 +1,55 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-restricted-workloads
+  annotations:
+    policies.kyverno.io/title: Require restricted workloads
+    policies.kyverno.io/category: Pod Security Standards
+    policies.kyverno.io/severity: high
+spec:
+  background: true
+  webhookConfiguration:
+    failurePolicy: Fail
+  rules:
+    - name: require-restricted-pod-security
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - dev
+                - stage
+                - prod
+      validate:
+        failureAction: Enforce
+        message: Workloads must satisfy the Kubernetes restricted Pod Security Standard.
+        podSecurity:
+          level: restricted
+          version: v1.32
+    - name: require-read-only-root-filesystem
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - dev
+                - stage
+                - prod
+      validate:
+        failureAction: Enforce
+        message: Every container must use a read-only root filesystem.
+        foreach:
+          - list: request.object.spec.containers
+            pattern:
+              securityContext:
+                readOnlyRootFilesystem: true
+          - list: request.object.spec.initContainers || `[]`
+            pattern:
+              securityContext:
+                readOnlyRootFilesystem: true
+          - list: request.object.spec.ephemeralContainers || `[]`
+            pattern:
+              securityContext:
+                readOnlyRootFilesystem: true

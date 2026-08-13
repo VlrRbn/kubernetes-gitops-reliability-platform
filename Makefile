@@ -10,7 +10,7 @@ IMAGE_TAG ?= dev
 COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || printf 'unknown')
 VERSION ?= dev
 
-.PHONY: help check image-build cluster-create image-load deploy-local smoke-test local-demo argocd-bootstrap argocd-status promote cluster-delete
+.PHONY: help check image-build cluster-create image-load deploy-local smoke-test local-demo argocd-bootstrap argocd-status kyverno-bootstrap admission-status promote cluster-delete
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -58,6 +58,15 @@ argocd-status: ## Show generated Applications and environment workloads
 	  printf '\n[%s]\n' "$$namespace"; \
 	  kubectl get deployment,pod,service --namespace "$$namespace"; \
 	done
+
+kyverno-bootstrap: ## Install pinned Kyverno, audit live workloads, and enforce admission policies
+	@CLUSTER_NAME="$(CLUSTER_NAME)" ./scripts/bootstrap-kyverno.sh
+
+admission-status: ## Show admission policies and policy reports
+	@printf '[Cluster admission policies]\n'
+	@kubectl get clusterpolicy
+	@printf '\n[Workload policy reports]\n'
+	@kubectl get policyreport --all-namespaces
 
 promote: ## Update one environment: make promote TARGET_ENV=dev IMAGE_COMMIT=<full-sha>
 	@test -n "$(TARGET_ENV)" || { echo "TARGET_ENV is required" >&2; exit 1; }
