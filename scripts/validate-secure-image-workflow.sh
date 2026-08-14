@@ -31,12 +31,18 @@ done < <(grep -E '^[[:space:]]+uses:' "$WORKFLOW")
 require_literal "  contents: read" "Default repository permissions must remain read-only"
 [[ "$(grep -Fc '      packages: write' "$WORKFLOW")" -eq 1 ]] ||
   fail "packages: write must be granted exactly once, to the publish job"
+publish_block="$(sed -n '/^  publish:$/,$p' "$WORKFLOW")"
+if [[ "$(grep -Fc '      id-token: write' <<< "$publish_block")" -ne 1 ]] ||
+  [[ "$(grep -Fc '      id-token: write' "$WORKFLOW")" -ne 1 ]]; then
+  fail "id-token: write must be granted exactly once, to the trusted publish job"
+fi
 require_literal "    if: github.event_name == 'push' && github.ref == 'refs/heads/main'" \
   "Image publication must be restricted to push events on main"
 
 require_literal "  GO_VERSION: 1.26.5" "Go must be pinned to the reviewed version 1.26.5"
 require_literal "  TRIVY_VERSION: v0.73.0" "Trivy must be pinned to the reviewed version v0.73.0"
 require_literal "  SYFT_VERSION: v1.50.0" "Syft must be pinned to the reviewed version v1.50.0"
+require_literal "  COSIGN_VERSION: v3.1.3" "Cosign must be pinned to the reviewed version v3.1.3"
 require_literal '          exit-code: "1"' "Trivy findings must fail the workflow"
 require_literal "          ignore-unfixed: false" "Unfixed vulnerabilities must not be ignored"
 require_literal "          severity: HIGH,CRITICAL" "Trivy must block HIGH and CRITICAL vulnerabilities"
@@ -54,6 +60,21 @@ require_literal '            VERSION=sha-${{ github.sha }}' \
 # shellcheck disable=SC2016
 require_literal '          push_output="$(docker push "$IMAGE_REF")"' \
   "The isolated publish job must push the reviewed image"
+# The validator must match workflow and shell expressions literally.
+# shellcheck disable=SC2016
+require_literal '        run: cosign sign --yes "${IMAGE_REPOSITORY,,}@${IMAGE_DIGEST}"' \
+  "Cosign must sign the exact published digest"
+# shellcheck disable=SC2016
+require_literal '            --certificate-identity "$CERTIFICATE_IDENTITY"' \
+  "Cosign verification must require the expected workflow identity"
+# shellcheck disable=SC2016
+require_literal '            --certificate-oidc-issuer "$CERTIFICATE_OIDC_ISSUER"' \
+  "Cosign verification must require the GitHub OIDC issuer"
+# shellcheck disable=SC2016
+require_literal '          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/secure-image.yml@refs/heads/main' \
+  "The signer identity must be restricted to secure-image.yml on main"
+require_literal '          CERTIFICATE_OIDC_ISSUER: https://token.actions.githubusercontent.com' \
+  "The signer issuer must be restricted to GitHub Actions OIDC"
 require_literal "      - name: Verify immutable environment images" \
   "CI must verify every environment image against GHCR"
 require_literal "        run: ./scripts/verify-environment-images.sh" \

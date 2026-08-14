@@ -11,6 +11,8 @@ publishes only after the same commit reaches `main`.
 4. Generate an SPDX JSON SBOM with a pinned Syft release.
 5. Export the scanned image as a short-lived workflow artifact.
 6. On `main` only, load that artifact and publish it to GHCR.
+7. Sign the exact registry digest with a keyless GitHub OIDC identity and verify
+   the resulting signature before the publish job succeeds.
 
 The published identity is:
 
@@ -20,7 +22,13 @@ ghcr.io/vlrrbn/kubernetes-gitops-reliability-platform:sha-<full-commit-sha>
 
 The pipeline does not publish a mutable `latest` tag. The publish job is the
 only job granted `packages: write`; pull-request jobs retain read-only repository
-permissions. All referenced actions use full commit SHAs with reviewed version comments.
+permissions. The same trusted job alone receives `id-token: write`, which is
+required for short-lived keyless signing and is never available to pull-request
+jobs. All referenced actions use full commit SHAs with reviewed version comments.
+
+Cosign verification requires both the GitHub Actions issuer and the exact
+`secure-image.yml` workflow identity on `main`. The workflow signs the digest
+returned by GHCR, not the human-readable tag.
 
 ## Evidence And Retention
 
@@ -54,3 +62,6 @@ make check
 The workflow tests include negative cases for an unpinned action, a
 non-blocking vulnerability scan, ignored unfixed findings, a mutable image tag,
 publication outside `main`, and a missing pull-request trigger.
+Negative cases also reject missing signing OIDC permission, signing a tag
+instead of the published digest, a permissive signer identity, and missing
+issuer verification.

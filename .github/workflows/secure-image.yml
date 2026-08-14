@@ -18,6 +18,7 @@ env:
   HELM_VERSION: v3.21.3
   TRIVY_VERSION: v0.73.0
   SYFT_VERSION: v1.50.0
+  COSIGN_VERSION: v3.1.3
   DOCKER_BUILD_RECORD_UPLOAD: "false"
 
 jobs:
@@ -122,6 +123,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      id-token: write
       packages: write
     steps:
       - name: Derive immutable image reference
@@ -147,6 +149,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+
       - name: Publish immutable image
         id: push
         shell: bash
@@ -162,6 +169,26 @@ jobs:
           }
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
+      - name: Sign published image identity
+        env:
+          IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "${IMAGE_REPOSITORY,,}@${IMAGE_DIGEST}"
+
+      - name: Verify published image signature
+        env:
+          IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/secure-image.yml@refs/heads/main
+          CERTIFICATE_OIDC_ISSUER: https://token.actions.githubusercontent.com
+        run: |
+          cosign verify \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer "$CERTIFICATE_OIDC_ISSUER" \
+            "${IMAGE_REPOSITORY,,}@${IMAGE_DIGEST}" \
+            > cosign-verification.json
+          jq --exit-status 'length > 0' cosign-verification.json >/dev/null
+
       - name: Record published identity
         env:
           IMAGE_REF: ${{ steps.image.outputs.ref }}
@@ -171,4 +198,6 @@ jobs:
             echo "### Published image"
             echo
             echo "\`${IMAGE_REF}@${IMAGE_DIGEST}\`"
+            echo
+            echo "Keyless signature verified for the repository workflow identity."
           } >> "$GITHUB_STEP_SUMMARY"
