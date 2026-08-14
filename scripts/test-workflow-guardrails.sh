@@ -116,12 +116,28 @@ expect_rejected \
 cp "$WORKFLOW" "${TEST_DIR}/signing-tag-instead-of-digest.yml"
 # The mutation targets literal workflow shell expressions.
 # shellcheck disable=SC2016
-sed -i 's|cosign sign --yes "${IMAGE_REPOSITORY,,}@${IMAGE_DIGEST}"|cosign sign --yes "$IMAGE_REF"|' \
+sed -i 's|cosign sign --yes --registry-referrers-mode=legacy "${IMAGE_REPOSITORY,,}@${IMAGE_DIGEST}"|cosign sign --yes --registry-referrers-mode=legacy "$IMAGE_REF"|' \
   "${TEST_DIR}/signing-tag-instead-of-digest.yml"
 expect_rejected \
   "signing a mutable tag instead of the published digest" \
   "${TEST_DIR}/signing-tag-instead-of-digest.yml" \
-  "Cosign must sign the exact published digest"
+  "Cosign must sign the exact published digest using Kyverno-compatible signature storage"
+
+cp "$WORKFLOW" "${TEST_DIR}/oci-only-signature.yml"
+sed -i 's|cosign sign --yes --registry-referrers-mode=legacy|cosign sign --yes|' \
+  "${TEST_DIR}/oci-only-signature.yml"
+expect_rejected \
+  "signature storage incompatible with pinned Kyverno" \
+  "${TEST_DIR}/oci-only-signature.yml" \
+  "Cosign must sign the exact published digest using Kyverno-compatible signature storage"
+
+cp "$WORKFLOW" "${TEST_DIR}/oci-only-verification.yml"
+sed -i '/^[[:space:]]*--registry-referrers-mode=legacy \\$/d' \
+  "${TEST_DIR}/oci-only-verification.yml"
+expect_rejected \
+  "verification storage incompatible with pinned Kyverno" \
+  "${TEST_DIR}/oci-only-verification.yml" \
+  "Cosign verification must read the Kyverno-compatible signature storage"
 
 cp "$WORKFLOW" "${TEST_DIR}/permissive-signer-identity.yml"
 # The mutation targets the literal GitHub Actions expression.

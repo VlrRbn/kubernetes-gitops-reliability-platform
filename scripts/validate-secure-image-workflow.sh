@@ -62,8 +62,10 @@ require_literal '          push_output="$(docker push "$IMAGE_REF")"' \
   "The isolated publish job must push the reviewed image"
 # The validator must match workflow and shell expressions literally.
 # shellcheck disable=SC2016
-require_literal '        run: cosign sign --yes "${IMAGE_REPOSITORY,,}@${IMAGE_DIGEST}"' \
-  "Cosign must sign the exact published digest"
+require_literal '        run: cosign sign --yes --registry-referrers-mode=legacy "${IMAGE_REPOSITORY,,}@${IMAGE_DIGEST}"' \
+  "Cosign must sign the exact published digest using Kyverno-compatible signature storage"
+require_literal "            --registry-referrers-mode=legacy \\" \
+  "Cosign verification must read the Kyverno-compatible signature storage"
 # shellcheck disable=SC2016
 require_literal '            --certificate-identity "$CERTIFICATE_IDENTITY"' \
   "Cosign verification must require the expected workflow identity"
