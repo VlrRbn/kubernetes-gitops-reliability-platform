@@ -97,4 +97,50 @@ expect_rejected \
   "${TEST_DIR}/hardcoded-image-version.yml" \
   "Image version metadata must use the full commit SHA"
 
+cp "$WORKFLOW" "${TEST_DIR}/missing-signing-oidc.yml"
+sed -i '/^[[:space:]]*id-token: write$/d' "${TEST_DIR}/missing-signing-oidc.yml"
+expect_rejected \
+  "missing signing OIDC permission" \
+  "${TEST_DIR}/missing-signing-oidc.yml" \
+  "id-token: write must be granted exactly once"
+
+cp "$WORKFLOW" "${TEST_DIR}/signing-oidc-outside-publish.yml"
+sed -i '/^[[:space:]]*id-token: write$/d' "${TEST_DIR}/signing-oidc-outside-publish.yml"
+sed -i '0,/^  contents: read$/s//  contents: read\n  id-token: write/' \
+  "${TEST_DIR}/signing-oidc-outside-publish.yml"
+expect_rejected \
+  "signing OIDC permission outside the publish job" \
+  "${TEST_DIR}/signing-oidc-outside-publish.yml" \
+  "id-token: write must be granted exactly once, to the trusted publish job"
+
+cp "$WORKFLOW" "${TEST_DIR}/signing-tag-instead-of-digest.yml"
+# The mutation targets literal workflow shell expressions.
+# shellcheck disable=SC2016
+sed -i 's|cosign sign --yes "${IMAGE_REPOSITORY,,}@${IMAGE_DIGEST}"|cosign sign --yes "$IMAGE_REF"|' \
+  "${TEST_DIR}/signing-tag-instead-of-digest.yml"
+expect_rejected \
+  "signing a mutable tag instead of the published digest" \
+  "${TEST_DIR}/signing-tag-instead-of-digest.yml" \
+  "Cosign must sign the exact published digest"
+
+cp "$WORKFLOW" "${TEST_DIR}/permissive-signer-identity.yml"
+# The mutation targets the literal GitHub Actions expression.
+# shellcheck disable=SC2016
+sed -i 's|https://github.com/${{ github.repository }}/.github/workflows/secure-image.yml@refs/heads/main|.*|' \
+  "${TEST_DIR}/permissive-signer-identity.yml"
+expect_rejected \
+  "permissive signer identity" \
+  "${TEST_DIR}/permissive-signer-identity.yml" \
+  "The signer identity must be restricted to secure-image.yml on main"
+
+cp "$WORKFLOW" "${TEST_DIR}/missing-signature-verification.yml"
+# The mutation targets a literal workflow shell expression.
+# shellcheck disable=SC2016
+sed -i '/--certificate-oidc-issuer "$CERTIFICATE_OIDC_ISSUER"/d' \
+  "${TEST_DIR}/missing-signature-verification.yml"
+expect_rejected \
+  "missing signature issuer verification" \
+  "${TEST_DIR}/missing-signature-verification.yml" \
+  "Cosign verification must require the GitHub OIDC issuer"
+
 echo "Workflow guardrail negative tests passed"

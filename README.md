@@ -43,6 +43,12 @@ The publish job alone receives `packages: write`. GitHub Actions, Go, Helm,
 Trivy, and Syft versions are pinned. See `docs/secure-image-pipeline.md`
 for the delivery contract and its explicit supply-chain boundary.
 
+Published images are also signed keylessly with the GitHub Actions OIDC
+identity of `secure-image.yml` on protected `main`. The workflow immediately
+verifies the exact signed digest and expected issuer/identity. Cluster-side
+signature enforcement follows only after a signed image completes the existing
+`dev → stage → prod` promotion chain; see `docs/supply-chain-provenance.md`.
+
 ## GitOps Promotion
 
 Argo CD reconciles digest-pinned Helm releases for `dev`, `stage`, and `prod`
@@ -177,7 +183,7 @@ digest-pinned GHCR images.
 | SPDX JSON SBOM generation | Complete |
 | Argo CD promotion | Complete |
 | Admission policies | Complete |
-| Signed build provenance | Planned |
+| Signed build provenance | Signing implemented; cluster enforcement pending |
 | Observability and SLOs | Planned |
 | Incident exercises | Planned |
 
