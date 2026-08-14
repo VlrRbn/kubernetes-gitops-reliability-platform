@@ -34,6 +34,14 @@ expect_rejected() {
 
 "$VALIDATOR" "$WORKFLOW"
 
+cp "$WORKFLOW" "${TEST_DIR}/outdated-go-version.yml"
+sed -i 's/GO_VERSION: 1.26.6/GO_VERSION: 1.26.5/' \
+  "${TEST_DIR}/outdated-go-version.yml"
+expect_rejected \
+  "outdated vulnerable Go version" \
+  "${TEST_DIR}/outdated-go-version.yml" \
+  "Go must be pinned to the reviewed version 1.26.6"
+
 cp "$WORKFLOW" "${TEST_DIR}/unpinned-action.yml"
 sed -i -E 's|actions/checkout@[0-9a-f]{40}|actions/checkout@v5|' "${TEST_DIR}/unpinned-action.yml"
 expect_rejected \
