@@ -13,7 +13,8 @@ read-only and cannot request a signing identity.
 After GHCR returns the published digest, the workflow:
 
 1. installs Cosign `v3.1.3` through a commit-pinned installer;
-2. signs `ghcr.io/vlrrbn/kubernetes-gitops-reliability-platform@sha256:...`;
+2. signs `ghcr.io/vlrrbn/kubernetes-gitops-reliability-platform@sha256:...`
+   using Cosign's legacy registry storage mode for Kyverno `v1.18.2` compatibility;
 3. verifies the signature against both:
    - issuer `https://token.actions.githubusercontent.com`;
    - identity `https://github.com/VlrRbn/kubernetes-gitops-reliability-platform/.github/workflows/secure-image.yml@refs/heads/main`;
@@ -45,6 +46,15 @@ GitHub OIDC and the public Sigstore services. The certificate binds the signatur
 to a workflow identity; repository and branch protection remain part of that
 trust boundary. Signature verification will fail closed when the configured
 verifier cannot establish the required identity.
+
+Cosign `v3.1.3` defaults to OCI 1.1 referrers, but the pinned Kyverno
+`v1.18.2` verifier cannot currently discover those signatures in GHCR even
+with `cosignOCI11: true`. The workflow therefore explicitly uses
+`--registry-referrers-mode=legacy` for both signing and verification. This
+changes only signature storage and discovery; the signed digest, GitHub OIDC
+issuer, certificate identity, and transparency-log verification remain the
+same. The compatibility mode can be removed only after a pinned Kyverno
+version passes both the signed-image and unsigned-image verification tests.
 
 This capability proves image authenticity. It does not implement progressive
 delivery, automated rollback, or a private Sigstore deployment.
