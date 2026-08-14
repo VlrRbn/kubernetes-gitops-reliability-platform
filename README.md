@@ -183,7 +183,7 @@ digest-pinned GHCR images.
 | SPDX JSON SBOM generation | Complete |
 | Argo CD promotion | Complete |
 | Admission policies | Complete |
-| Signed build provenance | Signing implemented; cluster enforcement pending |
+| Signed build provenance | Signing complete; admission verification blocked upstream |
 | Observability and SLOs | Planned |
 | Incident exercises | Planned |
 
@@ -191,6 +191,10 @@ See `docs/local-foundation-acceptance.md` for the completed local contract,
 `docs/secure-image-pipeline.md` for the image delivery contract, and
 `docs/gitops-promotion.md` and `docs/admission-policy.md` for the cluster
 delivery controls. `docs/roadmap.md` contains the internal milestone map.
+Kyverno admission verification of Cosign v3 signatures is intentionally
+deferred because the pinned Kyverno release cannot discover the default OCI
+1.1 signature artifacts in GHCR. The exact boundary and exit criteria are
+documented in `docs/supply-chain-provenance.md`.
 
 ## Safety Boundary
 

@@ -22,21 +22,46 @@ After GHCR returns the published digest, the workflow:
 Signing the registry digest avoids trusting a mutable tag-to-digest mapping.
 The image remains promoted with both its source commit tag and immutable digest.
 
-## Activation Sequence
+## Admission Verification Status
 
-Image signing must exist before cluster enforcement. The controlled sequence is:
+Workflow signing and verification are complete. Admission verification is
+intentionally deferred because Kyverno `v1.18.2` `ClusterPolicy verifyImages`
+does not discover the default OCI 1.1 referring artifacts published by Cosign
+`v3.1.3` in GHCR. Cosign verifies the same keyless signature successfully, but
+Kyverno reports `no signatures found`. The incompatibility is tracked in
+[Kyverno issue #16854](https://github.com/kyverno/kyverno/issues/16854).
+
+The project does not switch Cosign to the deprecated legacy bundle and signing
+configuration modes as a workaround. Keeping the default Cosign v3 format
+avoids adding a temporary compatibility path to the trusted publication job.
+
+This limitation affects only signer-identity enforcement at Kubernetes
+admission. The following controls remain active:
+
+- the trusted workflow signs and verifies the exact published GHCR digest;
+- GitOps promotion carries the immutable tag and digest through dev, stage,
+  and prod;
+- Kyverno requires full `sha256` image digests;
+- Kyverno continues to enforce restricted workload and read-only filesystem
+  policies.
+
+## Resume Criteria
+
+Admission signature enforcement resumes only after a stable Kyverno release
+can consume the default Cosign v3 signature format. The complete sequence is:
 
 ```text
-merge signing workflow
-  -> publish and verify a signed image
-  -> promote the same signed identity through dev, stage, and prod
-  -> audit signature verification for all live workloads
+upgrade the pinned Kyverno release
+  -> prove a signed GHCR digest is accepted
+  -> prove an unsigned GHCR digest is rejected
+  -> promote one signed identity through dev, stage, and prod
+  -> audit signature verification for every live workload
   -> enforce Kyverno image signature verification
 ```
 
-Applying signature enforcement before this sequence would reject rollouts of the
-currently promoted image, which predates signing. The Kyverno enforcement policy is
-therefore added only after a signed image has completed the normal promotion chain.
+Any discovery error, verifier error, or failed negative test blocks enforcement.
+The repository does not claim cluster-side provenance enforcement until this
+sequence passes end to end.
 
 ## Trust And Availability Trade-offs
 
@@ -46,5 +71,7 @@ to a workflow identity; repository and branch protection remain part of that
 trust boundary. Signature verification will fail closed when the configured
 verifier cannot establish the required identity.
 
-This capability proves image authenticity. It does not implement progressive
-delivery, automated rollback, or a private Sigstore deployment.
+The publication workflow proves image authenticity at build time. Kubernetes
+admission currently proves image immutability, but not signer identity. This
+capability does not implement progressive delivery, automated rollback, or a
+private Sigstore deployment.
