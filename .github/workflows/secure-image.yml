@@ -173,7 +173,7 @@ jobs:
         env:
           IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}
           IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
-        run: cosign sign --yes --registry-referrers-mode=legacy "${IMAGE_REPOSITORY,,}@${IMAGE_DIGEST}"
+        run: cosign sign --yes "${IMAGE_REPOSITORY,,}@${IMAGE_DIGEST}"
 
       - name: Verify published image signature
         env:
@@ -183,7 +183,6 @@ jobs:
           CERTIFICATE_OIDC_ISSUER: https://token.actions.githubusercontent.com
         run: |
           cosign verify \
-            --registry-referrers-mode=legacy \
             --certificate-identity "$CERTIFICATE_IDENTITY" \
             --certificate-oidc-issuer "$CERTIFICATE_OIDC_ISSUER" \
             "${IMAGE_REPOSITORY,,}@${IMAGE_DIGEST}" \

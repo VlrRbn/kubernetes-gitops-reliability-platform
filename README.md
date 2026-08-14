@@ -48,9 +48,6 @@ identity of `secure-image.yml` on protected `main`. The workflow immediately
 verifies the exact signed digest and expected issuer/identity. Cluster-side
 signature enforcement follows only after a signed image completes the existing
 `dev → stage → prod` promotion chain; see `docs/supply-chain-provenance.md`.
-Signature storage currently uses Cosign's explicit legacy registry mode for
-compatibility with the pinned Kyverno `v1.18.2`; the digest and OIDC trust
-contract are unchanged.
 
 ## GitOps Promotion
 
