@@ -34,6 +34,29 @@ expect_rejected() {
 
 "$VALIDATOR" "$WORKFLOW"
 
+cp "$WORKFLOW" "${TEST_DIR}/missing-scheduled-scan.yml"
+sed -i '/^  schedule:$/,+1d' "${TEST_DIR}/missing-scheduled-scan.yml"
+expect_rejected \
+  "missing scheduled vulnerability scan" \
+  "${TEST_DIR}/missing-scheduled-scan.yml" \
+  "Scheduled vulnerability scans are required"
+
+cp "$WORKFLOW" "${TEST_DIR}/missing-manual-scan.yml"
+sed -i '/^  workflow_dispatch:$/d' "${TEST_DIR}/missing-manual-scan.yml"
+expect_rejected \
+  "missing manual vulnerability scan" \
+  "${TEST_DIR}/missing-manual-scan.yml" \
+  "Manual vulnerability scans are required"
+
+cp "$WORKFLOW" "${TEST_DIR}/shared-main-concurrency.yml"
+# The mutation targets literal GitHub Actions expressions.
+# shellcheck disable=SC2016
+sed -i 's/${{ github.event_name }}-//' "${TEST_DIR}/shared-main-concurrency.yml"
+expect_rejected \
+  "scheduled scan sharing publication concurrency" \
+  "${TEST_DIR}/shared-main-concurrency.yml" \
+  "Scheduled scans must not cancel pull request or publication workflows"
+
 cp "$WORKFLOW" "${TEST_DIR}/outdated-go-version.yml"
 sed -i 's/GO_VERSION: 1.26.6/GO_VERSION: 1.26.5/' \
   "${TEST_DIR}/outdated-go-version.yml"

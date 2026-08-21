@@ -38,6 +38,8 @@ Every pull request runs the project checks, builds the image, blocks on
 `HIGH`/`CRITICAL` Trivy findings, and generates an SPDX JSON SBOM.
 A separate job publishes the exact reviewed image only after the commit reaches `main`.
 Images use `sha-<full-commit-sha>` tags; the pipeline does not publish `latest`.
+The same pinned scan runs daily with a refreshed vulnerability database so new
+findings are reported even when no pull request is open.
 
 The publish job alone receives `packages: write`. GitHub Actions, Go, Helm,
 Trivy, and Syft versions are pinned. See `docs/secure-image-pipeline.md`
@@ -46,8 +48,8 @@ for the delivery contract and its explicit supply-chain boundary.
 Published images are also signed keylessly with the GitHub Actions OIDC
 identity of `secure-image.yml` on protected `main`. The workflow immediately
 verifies the exact signed digest and expected issuer/identity. Cluster-side
-signature enforcement follows only after a signed image completes the existing
-`dev → stage → prod` promotion chain; see `docs/supply-chain-provenance.md`.
+signature enforcement remains deferred by the documented Kyverno/Cosign OCI
+1.1 compatibility blocker; see `docs/supply-chain-provenance.md`.
 
 ## GitOps Promotion
 

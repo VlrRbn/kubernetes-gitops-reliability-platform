@@ -20,8 +20,16 @@ require_literal() {
 
 grep -Eq '^  pull_request:[[:space:]]*$' "$WORKFLOW" || fail "Pull request checks are required"
 grep -Eq '^  push:[[:space:]]*$' "$WORKFLOW" || fail "Push trigger is required for publication"
+grep -Eq '^  schedule:[[:space:]]*$' "$WORKFLOW" || fail "Scheduled vulnerability scans are required"
+require_literal '    - cron: "0 6 * * *"' "Scheduled vulnerability scans must run daily at 06:00 UTC"
+grep -Eq '^  workflow_dispatch:[[:space:]]*$' "$WORKFLOW" || fail "Manual vulnerability scans are required"
 require_literal "      - main" "Push publication must target main only"
 grep -Fq 'pull_request_target:' "$WORKFLOW" && fail "pull_request_target is forbidden for untrusted changes"
+
+# The validator must match the GitHub Actions expressions literally.
+# shellcheck disable=SC2016
+require_literal '  group: secure-image-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}' \
+  "Scheduled scans must not cancel pull request or publication workflows"
 
 while IFS= read -r action; do
   grep -Eq '^[[:space:]]+uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}[[:space:]]+# v[0-9]' <<< "$action" ||

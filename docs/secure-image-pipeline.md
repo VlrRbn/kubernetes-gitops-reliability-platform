@@ -30,6 +30,18 @@ Cosign verification requires both the GitHub Actions issuer and the exact
 `secure-image.yml` workflow identity on `main`. The workflow signs the digest
 returned by GHCR, not the human-readable tag.
 
+## Continuous Vulnerability Re-evaluation
+
+The same pinned build and Trivy scan runs every day at `06:00 UTC` and can be
+started manually with `workflow_dispatch`. Trivy remains pinned to the reviewed
+binary version while its vulnerability database is refreshed, allowing newly
+published `HIGH` or `CRITICAL` findings in the current `main` binary to fail CI
+before an unrelated pull request is merged.
+
+Scheduled and manual runs never publish an image because publication requires a
+`push` event on `main`. Their concurrency key includes the event type, so they
+cannot cancel an in-progress pull-request check or trusted publication run.
+
 ## Evidence And Retention
 
 - The SPDX JSON SBOM is retained as a workflow artifact for 14 days.
