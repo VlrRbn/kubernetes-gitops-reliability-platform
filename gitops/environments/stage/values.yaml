@@ -2,8 +2,8 @@ replicaCount: 2
 
 image:
   repository: ghcr.io/vlrrbn/kubernetes-gitops-reliability-platform
-  tag: sha-03486a635ddddd4c31a30707344403cdaf512db9
-  digest: sha256:917e7e074887af03d25d8282011215705cd2c7afe34eef0f992ddfe762b96917
+  tag: sha-2a5bb6271cb70fd224997241b890e5e42eb029bc
+  digest: sha256:671788b8087031cf1bbd9bb0d57c7453ff6ffbee1249a2dc3c99cafefb67c660
   pullPolicy: IfNotPresent
 
 fault:
