@@ -9,7 +9,7 @@ requests, releases, and README sections use capability names instead.
 | Secure Image Pipeline | `v0.2.0` | Complete |
 | GitOps Promotion | `v0.3.0` | Complete |
 | Admission Policy | `v0.4.0` | Complete |
-| Supply Chain Provenance | `v0.5.0` | Signing complete; admission verification blocked upstream |
+| Supply Chain Provenance | `v0.5.0` | Kyverno-compatible signing complete; admission enforcement staged |
 | Observability | `v0.6.0` | Planned |
 | Reliability Platform | `v1.0.0` | Planned |
 

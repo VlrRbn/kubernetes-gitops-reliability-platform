@@ -12,7 +12,7 @@ read-only and cannot request a signing identity.
 
 After GHCR returns the published digest, the workflow:
 
-1. installs Cosign `v3.1.3` through a commit-pinned installer;
+1. installs Cosign `v2.6.5` through a commit-pinned installer;
 2. signs `ghcr.io/vlrrbn/kubernetes-gitops-reliability-platform@sha256:...`;
 3. verifies the signature against both:
    - issuer `https://token.actions.githubusercontent.com`;
@@ -24,19 +24,22 @@ The image remains promoted with both its source commit tag and immutable digest.
 
 ## Admission Verification Status
 
-Workflow signing and verification are complete. Admission verification is
-intentionally deferred because Kyverno `v1.18.2` `ClusterPolicy verifyImages`
-does not discover the default OCI 1.1 referring artifacts published by Cosign
-`v3.1.3` in GHCR. Cosign verifies the same keyless signature successfully, but
-Kyverno reports `no signatures found`. The incompatibility is tracked in
+Workflow signing and verification are complete. Cosign `v2.6.5` is a deliberate
+compatibility pin. An isolated
+[GitHub Actions run](https://github.com/VlrRbn/kubernetes-gitops-reliability-platform/actions/runs/32585583626)
+signed an exact GHCR digest; Cosign accepted that digest and rejected an
+unsigned digest. A subsequent live Kyverno `v1.18.2` admission test accepted
+the signed image while rejecting an unsigned image and a wrong workflow
+identity. A real registry DNS timeout also blocked admission, confirming the
+fail-closed availability trade-off.
+
+The pin avoids unreviewed compatibility flags. It is temporary because Kyverno
+`v1.18.2` cannot discover default OCI 1.1 referring artifacts published by
+Cosign v3 in GHCR; that incompatibility is tracked in
 [Kyverno issue #16854](https://github.com/kyverno/kyverno/issues/16854).
 
-The project does not switch Cosign to the deprecated legacy bundle and signing
-configuration modes as a workaround. Keeping the default Cosign v3 format
-avoids adding a temporary compatibility path to the trusted publication job.
-
-This limitation affects only signer-identity enforcement at Kubernetes
-admission. The following controls remain active:
+Cluster-side signer-identity enforcement is still staged. The following
+controls remain active during the transition:
 
 - the trusted workflow signs and verifies the exact published GHCR digest;
 - GitOps promotion carries the immutable tag and digest through dev, stage,
@@ -45,15 +48,14 @@ admission. The following controls remain active:
 - Kyverno continues to enforce restricted workload and read-only filesystem
   policies.
 
-## Resume Criteria
+## Admission Activation Sequence
 
-Admission signature enforcement resumes only after a stable Kyverno release
-can consume the default Cosign v3 signature format. The complete sequence is:
+The compatibility proof does not by itself authorize immediate enforcement.
+The complete sequence is:
 
 ```text
-upgrade the pinned Kyverno release
-  -> prove a signed GHCR digest is accepted
-  -> prove an unsigned GHCR digest is rejected
+merge the reviewed Cosign v2.6.5 workflow pin
+  -> publish a v2-signed image from protected main
   -> promote one signed identity through dev, stage, and prod
   -> audit signature verification for every live workload
   -> enforce Kyverno image signature verification
@@ -61,7 +63,9 @@ upgrade the pinned Kyverno release
 
 Any discovery error, verifier error, or failed negative test blocks enforcement.
 The repository does not claim cluster-side provenance enforcement until this
-sequence passes end to end.
+sequence passes end to end. Migration back to Cosign v3 requires a stable
+Kyverno release to repeat the signed, unsigned, wrong-identity, and verifier
+failure tests before the version pin changes.
 
 ## Trust And Availability Trade-offs
 

@@ -28,7 +28,10 @@ jobs. All referenced actions use full commit SHAs with reviewed version comments
 
 Cosign verification requires both the GitHub Actions issuer and the exact
 `secure-image.yml` workflow identity on `main`. The workflow signs the digest
-returned by GHCR, not the human-readable tag.
+returned by GHCR, not the human-readable tag. Cosign is pinned to `v2.6.5`, the
+reviewed release proven compatible with the pinned Kyverno `v1.18.2`; moving
+back to v3 requires a fresh signed, unsigned, and wrong-identity compatibility
+test against a stable Kyverno release.
 
 ## Continuous Vulnerability Re-evaluation
 
@@ -76,4 +79,5 @@ non-blocking vulnerability scan, ignored unfixed findings, a mutable image tag,
 publication outside `main`, and a missing pull-request trigger.
 Negative cases also reject missing signing OIDC permission, signing a tag
 instead of the published digest, a permissive signer identity, and missing
-issuer verification.
+issuer verification. The contract also rejects a Cosign version that differs
+from the reviewed Kyverno-compatible `v2.6.5` pin.
