@@ -50,7 +50,7 @@ require_literal "    if: github.event_name == 'push' && github.ref == 'refs/head
 require_literal "  GO_VERSION: 1.26.6" "Go must be pinned to the reviewed version 1.26.6"
 require_literal "  TRIVY_VERSION: v0.73.0" "Trivy must be pinned to the reviewed version v0.73.0"
 require_literal "  SYFT_VERSION: v1.50.0" "Syft must be pinned to the reviewed version v1.50.0"
-require_literal "  COSIGN_VERSION: v3.1.3" "Cosign must be pinned to the reviewed version v3.1.3"
+require_literal "  COSIGN_VERSION: v2.6.5" "Cosign must be pinned to the reviewed Kyverno-compatible version v2.6.5"
 require_literal '          exit-code: "1"' "Trivy findings must fail the workflow"
 require_literal "          ignore-unfixed: false" "Unfixed vulnerabilities must not be ignored"
 require_literal "          severity: HIGH,CRITICAL" "Trivy must block HIGH and CRITICAL vulnerabilities"

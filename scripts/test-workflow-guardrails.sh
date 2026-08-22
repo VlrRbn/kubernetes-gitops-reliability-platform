@@ -65,6 +65,14 @@ expect_rejected \
   "${TEST_DIR}/outdated-go-version.yml" \
   "Go must be pinned to the reviewed version 1.26.6"
 
+cp "$WORKFLOW" "${TEST_DIR}/incompatible-cosign-version.yml"
+sed -i 's/COSIGN_VERSION: v2.6.5/COSIGN_VERSION: v3.1.3/' \
+  "${TEST_DIR}/incompatible-cosign-version.yml"
+expect_rejected \
+  "Cosign version incompatible with pinned Kyverno" \
+  "${TEST_DIR}/incompatible-cosign-version.yml" \
+  "Cosign must be pinned to the reviewed Kyverno-compatible version v2.6.5"
+
 cp "$WORKFLOW" "${TEST_DIR}/unpinned-action.yml"
 sed -i -E 's|actions/checkout@[0-9a-f]{40}|actions/checkout@v5|' "${TEST_DIR}/unpinned-action.yml"
 expect_rejected \

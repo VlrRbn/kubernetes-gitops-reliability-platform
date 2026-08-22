@@ -47,9 +47,10 @@ for the delivery contract and its explicit supply-chain boundary.
 
 Published images are also signed keylessly with the GitHub Actions OIDC
 identity of `secure-image.yml` on protected `main`. The workflow immediately
-verifies the exact signed digest and expected issuer/identity. Cluster-side
-signature enforcement remains deferred by the documented Kyverno/Cosign OCI
-1.1 compatibility blocker; see `docs/supply-chain-provenance.md`.
+verifies the exact signed digest and expected issuer/identity. Cosign `v2.6.5`
+is pinned as the reviewed compatibility line for Kyverno `v1.18.2` while
+cluster-side signature enforcement is staged; see
+`docs/supply-chain-provenance.md`.
 
 ## GitOps Promotion
 
@@ -185,7 +186,7 @@ digest-pinned GHCR images.
 | SPDX JSON SBOM generation | Complete |
 | Argo CD promotion | Complete |
 | Admission policies | Complete |
-| Signed build provenance | Signing complete; admission verification blocked upstream |
+| Signed build provenance | Kyverno-compatible signing complete; admission enforcement staged |
 | Observability and SLOs | Planned |
 | Incident exercises | Planned |
 
@@ -193,10 +194,11 @@ See `docs/local-foundation-acceptance.md` for the completed local contract,
 `docs/secure-image-pipeline.md` for the image delivery contract, and
 `docs/gitops-promotion.md` and `docs/admission-policy.md` for the cluster
 delivery controls. `docs/roadmap.md` contains the internal milestone map.
-Kyverno admission verification of Cosign v3 signatures is intentionally
-deferred because the pinned Kyverno release cannot discover the default OCI
-1.1 signature artifacts in GHCR. The exact boundary and exit criteria are
-documented in `docs/supply-chain-provenance.md`.
+Cosign is temporarily pinned to the reviewed `v2.6.5` compatibility line because
+the pinned Kyverno release cannot discover default Cosign v3 OCI 1.1 signature
+artifacts in GHCR. Admission enforcement follows only after a v2-signed `main`
+image is promoted and audited; the boundary is documented in
+`docs/supply-chain-provenance.md`.
 
 ## Safety Boundary
 
