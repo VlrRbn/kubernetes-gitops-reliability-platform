@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: signed-main-image
+  namespace: dev
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/vlrrbn/kubernetes-gitops-reliability-platform@sha256:671788b8087031cf1bbd9bb0d57c7453ff6ffbee1249a2dc3c99cafefb67c660
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: unsigned-image
+  namespace: dev
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/vlrrbn/kubernetes-gitops-reliability-platform@sha256:36769bfe4cc94ad7e6bc920d6ef318ed102a56d7c0fcda4ecbe216cd435e2f54
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: wrong-workflow-identity
+  namespace: dev
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/vlrrbn/kubernetes-gitops-reliability-platform@sha256:0ef6467b187d3ba3284b021df2188d2a32b67358488d4c460f7bdebb108b9e15
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: unverifiable-image
+  namespace: dev
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/vlrrbn/kubernetes-gitops-reliability-platform@sha256:0000000000000000000000000000000000000000000000000000000000000000

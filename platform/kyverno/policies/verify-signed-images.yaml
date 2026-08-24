@@ -1,0 +1,39 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-signed-images
+  annotations:
+    policies.kyverno.io/title: Verify trusted workflow signatures
+    policies.kyverno.io/category: Supply Chain
+    policies.kyverno.io/severity: high
+spec:
+  background: true
+  webhookConfiguration:
+    failurePolicy: Fail
+    timeoutSeconds: 20
+  rules:
+    - name: require-trusted-main-signature
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - dev
+                - stage
+                - prod
+      verifyImages:
+        - imageReferences:
+            - "*"
+          required: true
+          mutateDigest: false
+          verifyDigest: true
+          failureAction: Enforce
+          attestors:
+            - count: 1
+              entries:
+                - keyless:
+                    subject: https://github.com/VlrRbn/kubernetes-gitops-reliability-platform/.github/workflows/secure-image.yml@refs/heads/main
+                    issuer: https://token.actions.githubusercontent.com
+                    rekor:
+                      url: https://rekor.sigstore.dev

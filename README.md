@@ -48,8 +48,9 @@ for the delivery contract and its explicit supply-chain boundary.
 Published images are also signed keylessly with the GitHub Actions OIDC
 identity of `secure-image.yml` on protected `main`. The workflow immediately
 verifies the exact signed digest and expected issuer/identity. Cosign `v2.6.5`
-is pinned as the reviewed compatibility line for Kyverno `v1.18.2` while
-cluster-side signature enforcement is staged; see
+is pinned as the reviewed compatibility line for Kyverno `v1.18.2`. The
+cluster-side signature policy and its positive and negative contract tests are
+implemented and live enforcement acceptance is complete. See
 `docs/supply-chain-provenance.md`.
 
 ## GitOps Promotion
@@ -65,9 +66,11 @@ chart's `Deployment` and `Service` resources. See
 
 Kyverno rejects mutable image references and workloads that violate the
 Kubernetes restricted Pod Security Standard or use writable root filesystems
-in the Argo-managed environments. Kyverno `v1.18.2`, Helm chart `3.8.2`, its
-controller images, and the test CLI are pinned and verified. Bootstrap audits
-the live workloads before switching policies to `Enforce`; see
+in the Argo-managed environments. It also verifies that every workload image
+was signed by `secure-image.yml` on protected `main`. Kyverno `v1.18.2`, Helm
+chart `3.8.2`, its controller images, and the test CLI are pinned and verified.
+Bootstrap audits newly introduced policies against live workloads before
+switching them to `Enforce`; see
 `docs/admission-policy.md` for the contract and acceptance procedure.
 
 ## Security Defaults
@@ -186,7 +189,7 @@ digest-pinned GHCR images.
 | SPDX JSON SBOM generation | Complete |
 | Argo CD promotion | Complete |
 | Admission policies | Complete |
-| Signed build provenance | Kyverno-compatible signing complete; admission enforcement staged |
+| Signed build provenance | Complete |
 | Observability and SLOs | Planned |
 | Incident exercises | Planned |
 
@@ -196,8 +199,9 @@ See `docs/local-foundation-acceptance.md` for the completed local contract,
 delivery controls. `docs/roadmap.md` contains the internal milestone map.
 Cosign is temporarily pinned to the reviewed `v2.6.5` compatibility line because
 the pinned Kyverno release cannot discover default Cosign v3 OCI 1.1 signature
-artifacts in GHCR. Admission enforcement follows only after a v2-signed `main`
-image is promoted and audited; the boundary is documented in
+artifacts in GHCR. The signature policy must pass its live audit before this
+repository claims active enforcement; that acceptance is complete and the
+boundary is documented in
 `docs/supply-chain-provenance.md`.
 
 ## Safety Boundary
