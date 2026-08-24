@@ -56,6 +56,7 @@ done
 "${SCRIPT_DIR}/test-workflow-guardrails.sh"
 "${SCRIPT_DIR}/test-gitops-guardrails.sh"
 "${SCRIPT_DIR}/test-promotion-guardrails.sh"
+"${SCRIPT_DIR}/test-signature-policy-guardrails.sh"
 "${SCRIPT_DIR}/test-admission-policies.sh"
 
 for script in "${SCRIPT_DIR}"/*.sh; do

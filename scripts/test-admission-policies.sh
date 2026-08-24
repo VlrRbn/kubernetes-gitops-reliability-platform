@@ -20,4 +20,14 @@ docker run --rm \
   "$KYVERNO_CLI_IMAGE" \
   test .
 
+echo "Testing live registry signature verification contract."
+
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  --env HOME=/tmp \
+  --volume "${ROOT_DIR}:/workspace:ro" \
+  --workdir /workspace/tests/kyverno-signatures \
+  "$KYVERNO_CLI_IMAGE" \
+  test . --registry
+
 echo "Admission policy positive and negative tests passed"

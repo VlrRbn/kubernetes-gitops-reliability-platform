@@ -1,0 +1,23 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: signature-verification-contract
+policies:
+  - ../../platform/kyverno/policies/verify-signed-images.yaml
+resources:
+  - resources.yaml
+results:
+  - kind: Pod
+    policy: verify-signed-images
+    resources:
+      - signed-main-image
+    result: pass
+    rule: require-trusted-main-signature
+  - kind: Pod
+    policy: verify-signed-images
+    resources:
+      - unsigned-image
+      - wrong-workflow-identity
+      - unverifiable-image
+    result: fail
+    rule: require-trusted-main-signature

@@ -15,6 +15,7 @@ WORK_DIR="$(mktemp -d)"
 CHART_FILE="${WORK_DIR}/kyverno-${KYVERNO_CHART_VERSION}.tgz"
 RENDERED_FILE="${WORK_DIR}/kyverno-rendered.yaml"
 AUDIT_DIR="${WORK_DIR}/audit-policies"
+AUDIT_POLICY_NAMES=()
 AUDIT_APPLIED=false
 
 step() {
@@ -25,14 +26,17 @@ cleanup() {
   local status="$?"
   trap - EXIT
   if [[ "$AUDIT_APPLIED" == true ]]; then
-    if ! kubectl delete clusterpolicy require-immutable-images require-restricted-workloads \
+    if ! kubectl delete clusterpolicy "${AUDIT_POLICY_NAMES[@]}" \
       --ignore-not-found >/dev/null; then
       echo "CRITICAL: failed to remove temporary Audit policies" >&2
       status=1
-    elif kubectl get clusterpolicy require-immutable-images >/dev/null 2>&1 ||
-      kubectl get clusterpolicy require-restricted-workloads >/dev/null 2>&1; then
-      echo "CRITICAL: temporary Audit policies still exist" >&2
-      status=1
+    else
+      for policy_name in "${AUDIT_POLICY_NAMES[@]}"; do
+        if kubectl get clusterpolicy "$policy_name" >/dev/null 2>&1; then
+          echo "CRITICAL: temporary Audit policy still exists: $policy_name" >&2
+          status=1
+        fi
+      done
     fi
   fi
   rm -rf "$WORK_DIR"
@@ -99,25 +103,78 @@ helm upgrade --install kyverno "$CHART_FILE" \
   --wait \
   --timeout 5m
 
-step "Checking the admission policy lifecycle"
-if kubectl get clusterpolicy require-immutable-images >/dev/null 2>&1 ||
-  kubectl get clusterpolicy require-restricted-workloads >/dev/null 2>&1; then
-  if kubectl diff --filename "$POLICY_DIR" >/dev/null; then
-    echo "Kyverno ${KYVERNO_VERSION} and admission policies are already enforced"
-    exit 0
+step "Waiting for the Kyverno policy webhooks"
+webhooks_ready=false
+for _ in $(seq 1 60); do
+  if kubectl apply --dry-run=server \
+    --filename "$POLICY_DIR" >/dev/null 2>&1; then
+    webhooks_ready=true
+    break
   fi
-  echo "Refusing to replace existing admission policies without a fresh audit" >&2
+  sleep 2
+done
+[[ "$webhooks_ready" == true ]] || {
+  echo "Timed out waiting for the Kyverno policy webhooks" >&2
   exit 1
+}
+
+step "Checking the admission policy lifecycle"
+POLICY_FILES=()
+POLICY_NAMES=()
+AUDIT_POLICY_FILES=()
+
+for policy_file in "$POLICY_DIR"/*.yaml; do
+  policy_name="$(awk '$1 == "name:" {print $2; exit}' "$policy_file")"
+  [[ -n "$policy_name" ]] || {
+    echo "Unable to determine policy name from $policy_file" >&2
+    exit 1
+  }
+
+  POLICY_FILES+=("$policy_file")
+  POLICY_NAMES+=("$policy_name")
+
+  if kubectl get clusterpolicy "$policy_name" >/dev/null 2>&1; then
+    if kubectl diff --filename "$policy_file" >/dev/null; then
+      continue
+    fi
+    diff_status="$?"
+    if [[ "$diff_status" -eq 1 ]]; then
+      echo "Refusing to replace changed admission policy without a fresh audit: $policy_name" >&2
+    else
+      echo "Unable to compare existing admission policy: $policy_name" >&2
+    fi
+    exit 1
+  fi
+
+  AUDIT_POLICY_FILES+=("$policy_file")
+  AUDIT_POLICY_NAMES+=("$policy_name")
+done
+
+[[ "${#POLICY_FILES[@]}" -gt 0 ]] || {
+  echo "No admission policies found in $POLICY_DIR" >&2
+  exit 1
+}
+
+if [[ "${#AUDIT_POLICY_FILES[@]}" -eq 0 ]]; then
+  echo "Kyverno ${KYVERNO_VERSION} and admission policies are already enforced"
+  exit 0
 fi
 
 mkdir -p "$AUDIT_DIR"
-for policy in "$POLICY_DIR"/*.yaml; do
+expected_audit_actions=0
+for policy in "${AUDIT_POLICY_FILES[@]}"; do
+  enforce_actions="$(grep -c 'failureAction: Enforce' "$policy")"
+  [[ "$enforce_actions" -gt 0 ]] || {
+    echo "Policy has no enforce action to audit: $policy" >&2
+    exit 1
+  }
+  expected_audit_actions="$((expected_audit_actions + enforce_actions))"
   sed 's/failureAction: Enforce/failureAction: Audit/g' "$policy" \
     > "${AUDIT_DIR}/$(basename "$policy")"
 done
 
 audit_actions="$(grep -Rh 'failureAction: Audit' "$AUDIT_DIR" | wc -l)"
-[[ "$audit_actions" -eq 3 ]] || {
+[[ "$audit_actions" -eq "$expected_audit_actions" ]] || {
   echo "Unexpected number of audit policy actions: $audit_actions" >&2
   exit 1
 }
@@ -131,7 +188,7 @@ for _ in $(seq 1 60); do
   reports="$(kubectl get policyreport --all-namespaces --output=json)"
   reports_ready=true
   for namespace in dev stage prod; do
-    for policy in require-immutable-images require-restricted-workloads; do
+    for policy in "${AUDIT_POLICY_NAMES[@]}"; do
       if ! jq -e \
         --arg namespace "$namespace" \
         --arg policy "$policy" \
@@ -150,26 +207,23 @@ if [[ "$reports_ready" != true ]]; then
   exit 1
 fi
 
-failures="$(jq '[
-  .items[].results[]?
-  | select(.result == "fail")
-  | select(
-      .policy == "require-immutable-images"
-      or
-      .policy == "require-restricted-workloads"
-    )
-] | length' <<< "$reports")"
-if [[ "$failures" -ne 0 ]]; then
-  jq -r '
+failures=0
+for policy in "${AUDIT_POLICY_NAMES[@]}"; do
+  policy_failures="$(jq --arg policy "$policy" '[
     .items[].results[]?
-    | select(.result == "fail")
-    | select(
-        .policy == "require-immutable-images"
-        or
-        .policy == "require-restricted-workloads"
-      )
-    | "FAIL: \(.policy)/\(.rule): \(.message)"
-  ' <<< "$reports" >&2
+    | select(.result == "fail" and .policy == $policy)
+  ] | length' <<< "$reports")"
+  failures="$((failures + policy_failures))"
+done
+if [[ "$failures" -ne 0 ]]; then
+  for policy in "${AUDIT_POLICY_NAMES[@]}"; do
+    jq -r --arg policy "$policy" '
+      .items[] as $report
+      | $report.results[]?
+      | select(.result == "fail" and .policy == $policy)
+      | "FAIL: \($report.metadata.namespace)/\($report.scope.kind)/\($report.scope.name): \(.policy)/\(.rule): \(.message)"
+    ' <<< "$reports" >&2
+  done
 
   echo "Refusing to enforce admission policies: live workload audit found $failures failure(s)" >&2
   exit 1
@@ -177,6 +231,24 @@ fi
 
 step "Enforcing admission policies after a clean audit"
 kubectl apply --filename "$POLICY_DIR"
+
+for policy_name in "${POLICY_NAMES[@]}"; do
+  ready=false
+  for _ in $(seq 1 60); do
+    if kubectl get clusterpolicy "$policy_name" --output=json |
+      jq -e '.status.conditions[]? | select(.type == "Ready" and .status == "True")' \
+        >/dev/null; then
+      ready=true
+      break
+    fi
+    sleep 2
+  done
+  [[ "$ready" == true ]] || {
+    echo "Timed out waiting for enforced policy to become Ready: $policy_name" >&2
+    exit 1
+  }
+done
+
 AUDIT_APPLIED=false
 
 echo "Kyverno ${KYVERNO_VERSION} installed; live audit passed and policies are enforced"

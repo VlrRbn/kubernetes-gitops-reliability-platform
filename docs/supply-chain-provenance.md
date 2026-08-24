@@ -38,8 +38,11 @@ The pin avoids unreviewed compatibility flags. It is temporary because Kyverno
 Cosign v3 in GHCR; that incompatibility is tracked in
 [Kyverno issue #16854](https://github.com/kyverno/kyverno/issues/16854).
 
-Cluster-side signer-identity enforcement is still staged. The following
-controls remain active during the transition:
+Cluster-side signer-identity enforcement is active and covered by
+registry-backed positive and negative contract tests. The live Audit-to-Enforce
+activation completed against `dev`, `stage`, and `prod` with four policy passes
+and zero failures, warnings, or errors per workload. The following controls are
+active:
 
 - the trusted workflow signs and verifies the exact published GHCR digest;
 - GitOps promotion carries the immutable tag and digest through dev, stage,
@@ -76,6 +79,8 @@ trust boundary. Signature verification will fail closed when the configured
 verifier cannot establish the required identity.
 
 The publication workflow proves image authenticity at build time. Kubernetes
-admission currently proves image immutability, but not signer identity. This
-capability does not implement progressive delivery, automated rollback, or a
-private Sigstore deployment.
+admission verifies both digest immutability and the exact trusted signer
+identity. Live tests accepted the signed `main` digest and rejected unsigned,
+wrong-workflow-identity, and unverifiable digests. This capability does not
+implement progressive delivery, automated rollback, or a private Sigstore
+deployment.
