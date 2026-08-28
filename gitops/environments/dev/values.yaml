@@ -10,3 +10,7 @@ fault:
   delayMilliseconds: 0
   errorRate: 0
   ready: true
+
+metrics:
+  serviceMonitor:
+    enabled: true

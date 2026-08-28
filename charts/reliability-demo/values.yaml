@@ -10,6 +10,13 @@ service:
   type: ClusterIP
   port: 80
 
+metrics:
+  path: /metrics
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+
 containerPort: 8080
 
 fault:

@@ -10,7 +10,7 @@ IMAGE_TAG ?= dev
 COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || printf 'unknown')
 VERSION ?= dev
 
-.PHONY: help check image-build cluster-create image-load deploy-local smoke-test local-demo argocd-bootstrap argocd-status kyverno-bootstrap admission-status promote cluster-delete
+.PHONY: help check image-build cluster-create image-load deploy-local smoke-test local-demo argocd-bootstrap argocd-status monitoring-bootstrap alertmanager-test kyverno-bootstrap admission-status promote cluster-delete
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -41,6 +41,7 @@ deploy-local: ## Deploy the local image outside the Argo-managed environments
 	  --set-string image.repository="$(IMAGE_REPOSITORY)" \
 	  --set-string image.tag="$(IMAGE_TAG)" \
 	  --set-string image.digest= \
+	  --set metrics.serviceMonitor.enabled=false \
 	  --wait \
 	  --timeout 2m
 
@@ -58,6 +59,12 @@ argocd-status: ## Show generated Applications and environment workloads
 	  printf '\n[%s]\n' "$$namespace"; \
 	  kubectl get deployment,pod,service --namespace "$$namespace"; \
 	done
+
+monitoring-bootstrap: cluster-create ## Install the pinned Prometheus foundation
+	@CLUSTER_NAME="$(CLUSTER_NAME)" ./scripts/bootstrap-monitoring.sh
+
+alertmanager-test: ## Send a synthetic alert and verify local webhook delivery
+	@CLUSTER_NAME="$(CLUSTER_NAME)" ./scripts/test-alertmanager-delivery.sh
 
 kyverno-bootstrap: ## Install pinned Kyverno, audit live workloads, and enforce admission policies
 	@CLUSTER_NAME="$(CLUSTER_NAME)" ./scripts/bootstrap-kyverno.sh

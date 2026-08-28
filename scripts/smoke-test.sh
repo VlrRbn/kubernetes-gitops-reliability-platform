@@ -62,8 +62,11 @@ curl --silent --show-error --fail \
   "http://127.0.0.1:${LOCAL_PORT}/" |
   grep -Fq '"service":"reliability-demo"'
 
-curl --silent --show-error --fail \
-  "http://127.0.0.1:${LOCAL_PORT}/metrics" |
-  grep -Fq 'reliability_demo_http_requests_total'
+METRICS="$(curl --silent --show-error --fail \
+  "http://127.0.0.1:${LOCAL_PORT}/metrics")"
+
+grep -Fq 'reliability_demo_http_requests_total{code="200"}' <<< "$METRICS"
+grep -Fq 'reliability_demo_http_request_duration_seconds_bucket' <<< "$METRICS"
+grep -Fq 'reliability_demo_build_info{' <<< "$METRICS"
 
 echo "Smoke test passed for namespace ${NAMESPACE}"

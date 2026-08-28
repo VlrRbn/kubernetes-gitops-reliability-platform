@@ -22,8 +22,15 @@ func TestHealthyApplication(t *testing.T) {
 
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
-	if !strings.Contains(recorder.Body.String(), "reliability_demo_http_requests_total 1") {
-		t.Fatalf("metrics do not contain request count: %s", recorder.Body.String())
+	body := recorder.Body.String()
+	for _, metric := range []string{
+		`reliability_demo_http_requests_total{code="200"} 1`,
+		`reliability_demo_http_request_duration_seconds_count{code="200"} 1`,
+		`reliability_demo_build_info{commit="abc123",version="test"} 1`,
+	} {
+		if !strings.Contains(body, metric) {
+			t.Fatalf("metrics do not contain %q: %s", metric, body)
+		}
 	}
 }
 
@@ -44,9 +51,34 @@ func TestFaultModes(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 	body := recorder.Body.String()
-	if !strings.Contains(body, "reliability_demo_http_errors_total 1") ||
-		!strings.Contains(body, "reliability_demo_ready 0") {
-		t.Fatalf("metrics do not expose fault state: %s", body)
+	for _, metric := range []string{
+		"reliability_demo_http_errors_total 1",
+		`reliability_demo_http_requests_total{code="503"} 1`,
+		`reliability_demo_http_request_duration_seconds_count{code="503"} 1`,
+		"reliability_demo_ready 0",
+	} {
+		if !strings.Contains(body, metric) {
+			t.Fatalf("metrics do not contain %q: %s", metric, body)
+		}
+	}
+}
+
+func TestHandlersUseIsolatedMetricRegistries(t *testing.T) {
+	t.Parallel()
+
+	first := New(config.Config{Port: 8080, Ready: true}, func() float64 { return 0.9 }, "first", "111")
+	second := New(config.Config{Port: 8080, Ready: true}, func() float64 { return 0.9 }, "second", "222")
+
+	assertStatus(t, first, "/", http.StatusOK)
+
+	recorder := httptest.NewRecorder()
+	second.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	body := recorder.Body.String()
+	if !strings.Contains(body, `reliability_demo_http_requests_total{code="200"} 0`) {
+		t.Fatalf("second handler inherited metrics from first handler: %s", body)
+	}
+	if strings.Contains(body, `commit="111"`) {
+		t.Fatalf("second handler exposed first handler build identity: %s", body)
 	}
 }
 

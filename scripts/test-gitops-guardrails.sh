@@ -17,6 +17,8 @@ required_project_contracts=(
   "clusterResourceBlacklist:"
   "kind: Deployment"
   "kind: Service"
+  "group: monitoring.coreos.com"
+  "kind: ServiceMonitor"
   "warn: true"
 )
 
@@ -104,6 +106,16 @@ for environment in dev stage prod; do
 
   grep -Fq "@${digest}" "$rendered_file" || {
     echo "Rendered ${environment} workload does not use its configured digest" >&2
+    exit 1
+  }
+
+  grep -Fq "kind: ServiceMonitor" "$rendered_file" || {
+    echo "Rendered ${environment} release is missing its ServiceMonitor" >&2
+    exit 1
+  }
+
+  grep -Fq 'observability.reliability-platform.io/monitor: "true"' "$rendered_file" || {
+    echo "Rendered ${environment} ServiceMonitor is missing the Prometheus selector label" >&2
     exit 1
   }
 done

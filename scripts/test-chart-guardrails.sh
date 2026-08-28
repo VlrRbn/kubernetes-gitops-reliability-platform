@@ -4,8 +4,16 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 CHART="${ROOT_DIR}/charts/reliability-demo"
+MAKEFILE="${ROOT_DIR}/Makefile"
 RENDERED="$(mktemp)"
-trap 'rm -f "$RENDERED"' EXIT
+MONITOR_RENDERED="$(mktemp)"
+DEFAULT_RENDERED="$(mktemp)"
+trap 'rm -f "$RENDERED" "$MONITOR_RENDERED" "$DEFAULT_RENDERED"' EXIT
+
+grep -Fq -- '--set metrics.serviceMonitor.enabled=false' "$MAKEFILE" || {
+  echo "Local demo must remain independent from the ServiceMonitor CRD" >&2
+  exit 1
+}
 
 helm template reliability-demo "$CHART" \
   --namespace prod \
@@ -30,10 +38,55 @@ for line in "${required_lines[@]}"; do
   }
 done
 
+helm template reliability-demo "$CHART" \
+  --namespace prod \
+  --values "${ROOT_DIR}/gitops/environments/prod/values.yaml" \
+  --set metrics.serviceMonitor.enabled=true \
+  > "$MONITOR_RENDERED"
+
+required_monitor_lines=(
+  "apiVersion: monitoring.coreos.com/v1"
+  "kind: ServiceMonitor"
+  'observability.reliability-platform.io/monitor: "true"'
+  "port: http"
+  'path: "/metrics"'
+  'interval: "30s"'
+  'scrapeTimeout: "10s"'
+  "honorLabels: false"
+)
+
+for line in "${required_monitor_lines[@]}"; do
+  grep -Fq -- "$line" "$MONITOR_RENDERED" || {
+    echo "Rendered ServiceMonitor is missing guardrail: $line" >&2
+    exit 1
+  }
+done
+
+helm template reliability-demo "$CHART" > "$DEFAULT_RENDERED"
+
+grep -Fq "kind: ServiceMonitor" "$DEFAULT_RENDERED" && {
+  echo "ServiceMonitor must remain disabled until its CRD is installed" >&2
+  exit 1
+}
+
 if helm template reliability-demo "$CHART" \
   --set fault.errorRate=1.1 \
   >/dev/null 2>&1; then
   echo "Chart accepted fault.errorRate above 1" >&2
+  exit 1
+fi
+
+if helm template reliability-demo "$CHART" \
+  --set metrics.serviceMonitor.interval=5s \
+  >/dev/null 2>&1; then
+  echo "Chart accepted an unreviewed metrics scrape interval" >&2
+  exit 1
+fi
+
+if helm template reliability-demo "$CHART" \
+  --set-string metrics.path=metrics \
+  >/dev/null 2>&1; then
+  echo "Chart accepted a metrics path without a leading slash" >&2
   exit 1
 fi
 

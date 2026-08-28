@@ -11,6 +11,10 @@ fault:
   errorRate: 0
   ready: true
 
+metrics:
+  serviceMonitor:
+    enabled: true
+
 resources:
   requests:
     cpu: 50m
