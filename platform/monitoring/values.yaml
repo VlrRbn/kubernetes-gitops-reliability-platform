@@ -1,0 +1,117 @@
+crds:
+  enabled: true
+
+defaultRules:
+  create: false
+
+alertmanager:
+  enabled: false
+
+grafana:
+  enabled: false
+
+kubeStateMetrics:
+  enabled: false
+
+nodeExporter:
+  enabled: false
+
+kubeApiServer:
+  enabled: false
+
+kubelet:
+  enabled: false
+
+kubeControllerManager:
+  enabled: false
+
+coreDns:
+  enabled: false
+
+kubeDns:
+  enabled: false
+
+kubeEtcd:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+kubeProxy:
+  enabled: false
+
+prometheusOperator:
+  admissionWebhooks:
+    enabled: true
+    failurePolicy: Fail
+    timeoutSeconds: 10
+    patch:
+      enabled: true
+      image:
+        registry: ghcr.io
+        repository: jkroepke/kube-webhook-certgen
+        tag: 1.8.8
+        sha: cd85a621724cd9043a5b46a784578fa159437712f920166389fce830554e1c44
+  serviceMonitor:
+    selfMonitor: false
+  image:
+    registry: quay.io
+    repository: prometheus-operator/prometheus-operator
+    tag: v0.93.1
+    sha: e52bb28fd41c98dd407c7a8cba8bdcfe7eabd7447e250afaf1fe7bb816dedbff
+  prometheusConfigReloader:
+    image:
+      registry: quay.io
+      repository: prometheus-operator/prometheus-config-reloader
+      tag: v0.93.1
+      sha: 428f088fe6fe07ab138bda92113664b04848a1dc408e4d3680a60ecdb55d1a65
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+prometheus:
+  enabled: true
+  serviceMonitor:
+    selfMonitor: false
+  prometheusSpec:
+    image:
+      registry: quay.io
+      repository: prometheus/prometheus
+      tag: v3.14.0-distroless
+      sha: 50c707e96da5ade383cb1707790576480485e93de06aa60ad8802cb5f744bd0a
+    retention: 6h
+    scrapeInterval: 30s
+    scrapeTimeout: 10s
+    evaluationInterval: 30s
+    enableAdminAPI: false
+    disableAlerting: true
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector:
+      matchLabels:
+        observability.reliability-platform.io/monitor: "true"
+    serviceMonitorNamespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - dev
+            - stage
+            - prod
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector:
+      matchLabels:
+        observability.reliability-platform.io/rules: "true"
+    ruleNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi

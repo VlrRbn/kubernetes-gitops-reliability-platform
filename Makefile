@@ -10,7 +10,7 @@ IMAGE_TAG ?= dev
 COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || printf 'unknown')
 VERSION ?= dev
 
-.PHONY: help check image-build cluster-create image-load deploy-local smoke-test local-demo argocd-bootstrap argocd-status kyverno-bootstrap admission-status promote cluster-delete
+.PHONY: help check image-build cluster-create image-load deploy-local smoke-test local-demo argocd-bootstrap argocd-status monitoring-bootstrap kyverno-bootstrap admission-status promote cluster-delete
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -58,6 +58,9 @@ argocd-status: ## Show generated Applications and environment workloads
 	  printf '\n[%s]\n' "$$namespace"; \
 	  kubectl get deployment,pod,service --namespace "$$namespace"; \
 	done
+
+monitoring-bootstrap: cluster-create ## Install the pinned Prometheus foundation
+	@CLUSTER_NAME="$(CLUSTER_NAME)" ./scripts/bootstrap-monitoring.sh
 
 kyverno-bootstrap: ## Install pinned Kyverno, audit live workloads, and enforce admission policies
 	@CLUSTER_NAME="$(CLUSTER_NAME)" ./scripts/bootstrap-kyverno.sh
