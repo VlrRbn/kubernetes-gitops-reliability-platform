@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["replicaCount", "image", "service", "containerPort", "fault", "probes", "resources"],
+  "required": ["replicaCount", "image", "service", "metrics", "containerPort", "fault", "probes", "resources"],
   "properties": {
     "replicaCount": {"type": "integer", "minimum": 1, "maximum": 10},
     "image": {
@@ -21,6 +21,24 @@
       "properties": {
         "type": {"type": "string", "enum": ["ClusterIP"]},
         "port": {"type": "integer", "minimum": 1, "maximum": 65535}
+      },
+      "additionalProperties": false
+    },
+    "metrics": {
+      "type": "object",
+      "required": ["path", "serviceMonitor"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/[A-Za-z0-9/_-]+$"},
+        "serviceMonitor": {
+          "type": "object",
+          "required": ["enabled", "interval", "scrapeTimeout"],
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "interval": {"type": "string", "enum": ["15s", "30s", "60s"]},
+            "scrapeTimeout": {"type": "string", "enum": ["5s", "10s"]}
+          },
+          "additionalProperties": false
+        }
       },
       "additionalProperties": false
     },
