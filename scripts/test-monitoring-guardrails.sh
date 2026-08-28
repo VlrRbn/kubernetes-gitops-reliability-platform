@@ -19,7 +19,12 @@ required_bootstrap_contracts=(
   'Rendered monitoring image is not digest-pinned'
   'helm upgrade --install monitoring'
   'deployment/${OPERATOR_DEPLOYMENT}'
+  'kubectl apply --filename "$RULES_FILE"'
   'statefulset/${PROMETHEUS_STATEFULSET}'
+  'kubectl get --raw "$PROMETHEUS_RULES_API"'
+  'reliability-demo.slo.recording'
+  'reliability-demo.slo.alerts'
+  '/bin/promtool check config /etc/prometheus/config_out/prometheus.env.yaml'
   'Live monitoring image is not digest-pinned'
 )
 

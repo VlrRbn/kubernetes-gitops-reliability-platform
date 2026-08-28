@@ -9,11 +9,13 @@ CHART_VERSION="88.6.1"
 CHART_SHA256="d98b1a1a4f286cb6022c1f059edc01a83da31e3f2dd1ee70533384151a4dc354"
 CHART="oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack"
 VALUES_FILE="${ROOT_DIR}/platform/monitoring/values.yaml"
+RULES_FILE="${ROOT_DIR}/platform/monitoring/slo-rules.yaml"
 WORK_DIR="$(mktemp -d)"
 CHART_FILE="${WORK_DIR}/kube-prometheus-stack-${CHART_VERSION}.tgz"
 RENDERED_FILE="${WORK_DIR}/monitoring-rendered.yaml"
 OPERATOR_DEPLOYMENT="monitoring-kube-prometheus-operator"
 PROMETHEUS_STATEFULSET="prometheus-monitoring-kube-prometheus-prometheus"
+PROMETHEUS_RULES_API="/api/v1/namespaces/monitoring/services/monitoring-kube-prometheus-prometheus:http-web/proxy/api/v1/rules"
 
 cleanup() {
   rm -rf "$WORK_DIR"
@@ -85,6 +87,9 @@ kubectl rollout status \
   "deployment/${OPERATOR_DEPLOYMENT}" \
   --timeout=5m
 
+step "Applying SLO recording and alerting rules"
+kubectl apply --filename "$RULES_FILE"
+
 statefulset_ready=false
 for _ in $(seq 1 60); do
   if kubectl get statefulset "$PROMETHEUS_STATEFULSET" \
@@ -103,6 +108,31 @@ kubectl rollout status \
   --namespace monitoring \
   "statefulset/${PROMETHEUS_STATEFULSET}" \
   --timeout=5m
+
+rules_loaded=false
+for _ in $(seq 1 30); do
+  if kubectl get --raw "$PROMETHEUS_RULES_API" 2>/dev/null |
+    jq --exit-status '
+      [.data.groups[]?.name] as $groups |
+      ($groups | index("reliability-demo.slo.recording")) != null and
+      ($groups | index("reliability-demo.slo.alerts")) != null
+    ' >/dev/null; then
+    rules_loaded=true
+    break
+  fi
+  sleep 2
+done
+[[ "$rules_loaded" == true ]] || {
+  echo "Prometheus did not load both reviewed SLO rule groups" >&2
+  exit 1
+}
+
+kubectl exec \
+  --namespace monitoring \
+  "statefulset/${PROMETHEUS_STATEFULSET}" \
+  --container prometheus \
+  -- /bin/promtool check config /etc/prometheus/config_out/prometheus.env.yaml \
+  >/dev/null
 
 mapfile -t live_images < <(
   kubectl get deployment,statefulset \
@@ -123,4 +153,4 @@ for image in "${live_images[@]}"; do
   }
 done
 
-echo "Prometheus foundation ${CHART_VERSION} is ready with digest-pinned images"
+echo "Prometheus foundation ${CHART_VERSION} and SLO rules are ready"
