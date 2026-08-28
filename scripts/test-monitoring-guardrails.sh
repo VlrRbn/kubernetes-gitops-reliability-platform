@@ -46,8 +46,8 @@ grep -Eq '(^|[^a-z])latest([^a-z]|$)' "$BOOTSTRAP" "$VALUES" && {
 }
 
 mapfile -t image_shas < <(awk '$1 == "sha:" {gsub(/"/, "", $2); print $2}' "$VALUES")
-[[ "${#image_shas[@]}" -eq 4 ]] || {
-  echo "Expected exactly four monitoring image digests" >&2
+[[ "${#image_shas[@]}" -eq 5 ]] || {
+  echo "Expected exactly five monitoring image digests" >&2
   exit 1
 }
 for digest in "${image_shas[@]}"; do
@@ -61,7 +61,7 @@ required_values_contracts=(
   'failurePolicy: Fail'
   'timeoutSeconds: 10'
   'enableAdminAPI: false'
-  'disableAlerting: true'
+  'disableAlerting: false'
   'serviceMonitorSelectorNilUsesHelmValues: false'
   'observability.reliability-platform.io/monitor: "true"'
   'ruleSelectorNilUsesHelmValues: false'

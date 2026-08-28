@@ -58,6 +58,7 @@ done
 "${SCRIPT_DIR}/test-promotion-guardrails.sh"
 "${SCRIPT_DIR}/test-monitoring-guardrails.sh"
 "${SCRIPT_DIR}/test-slo-rules.sh"
+"${SCRIPT_DIR}/test-alertmanager-guardrails.sh"
 "${SCRIPT_DIR}/test-signature-policy-guardrails.sh"
 "${SCRIPT_DIR}/test-admission-policies.sh"
 

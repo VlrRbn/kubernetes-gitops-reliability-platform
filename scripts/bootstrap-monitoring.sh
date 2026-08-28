@@ -15,6 +15,7 @@ CHART_FILE="${WORK_DIR}/kube-prometheus-stack-${CHART_VERSION}.tgz"
 RENDERED_FILE="${WORK_DIR}/monitoring-rendered.yaml"
 OPERATOR_DEPLOYMENT="monitoring-kube-prometheus-operator"
 PROMETHEUS_STATEFULSET="prometheus-monitoring-kube-prometheus-prometheus"
+ALERTMANAGER_STATEFULSET="alertmanager-monitoring-kube-prometheus-alertmanager"
 PROMETHEUS_RULES_API="/api/v1/namespaces/monitoring/services/monitoring-kube-prometheus-prometheus:http-web/proxy/api/v1/rules"
 
 cleanup() {
@@ -62,7 +63,7 @@ mapfile -t rendered_images < <(
   } | sort -u
 )
 
-[[ "${#rendered_images[@]}" -eq 4 ]] || {
+[[ "${#rendered_images[@]}" -eq 5 ]] || {
   echo "Unexpected number of rendered monitoring images: ${#rendered_images[@]}" >&2
   printf '  %s\n' "${rendered_images[@]}" >&2
   exit 1
@@ -109,6 +110,11 @@ kubectl rollout status \
   "statefulset/${PROMETHEUS_STATEFULSET}" \
   --timeout=5m
 
+kubectl rollout status \
+  --namespace monitoring \
+  "statefulset/${ALERTMANAGER_STATEFULSET}" \
+  --timeout=5m
+
 rules_loaded=false
 for _ in $(seq 1 30); do
   if kubectl get --raw "$PROMETHEUS_RULES_API" 2>/dev/null |
@@ -134,6 +140,13 @@ kubectl exec \
   -- /bin/promtool check config /etc/prometheus/config_out/prometheus.env.yaml \
   >/dev/null
 
+kubectl exec \
+  --namespace monitoring \
+  "statefulset/${ALERTMANAGER_STATEFULSET}" \
+  --container alertmanager \
+  -- /bin/amtool check-config /etc/alertmanager/config_out/alertmanager.env.yaml \
+  >/dev/null
+
 mapfile -t live_images < <(
   kubectl get deployment,statefulset \
     --namespace monitoring \
@@ -141,7 +154,7 @@ mapfile -t live_images < <(
     jq -r '.items[] | .spec.template.spec | (.initContainers[]?.image, .containers[]?.image)' |
     sort -u
 )
-[[ "${#live_images[@]}" -eq 3 ]] || {
+[[ "${#live_images[@]}" -eq 4 ]] || {
   echo "Unexpected number of live monitoring images: ${#live_images[@]}" >&2
   printf '  %s\n' "${live_images[@]}" >&2
   exit 1
@@ -153,4 +166,4 @@ for image in "${live_images[@]}"; do
   }
 done
 
-echo "Prometheus foundation ${CHART_VERSION} and SLO rules are ready"
+echo "Prometheus, Alertmanager, and SLO rules are ready"

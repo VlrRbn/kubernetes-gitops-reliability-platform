@@ -5,7 +5,39 @@ defaultRules:
   create: false
 
 alertmanager:
-  enabled: false
+  enabled: true
+  tplConfig: true
+  stringConfig: |
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by:
+        - alertname
+        - namespace
+      group_wait: 1s
+      group_interval: 1m
+      repeat_interval: 4h
+      receiver: reliability-demo-dev
+    receivers:
+      - name: reliability-demo-dev
+        webhook_configs:
+          - url: http://reliability-demo.dev.svc.cluster.local/
+            send_resolved: true
+  alertmanagerSpec:
+    image:
+      registry: quay.io
+      repository: prometheus/alertmanager
+      tag: v0.34.0
+      sha: 690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d
+    automountServiceAccountToken: false
+    retention: 6h
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
 
 grafana:
   enabled: false
@@ -88,7 +120,7 @@ prometheus:
     scrapeTimeout: 10s
     evaluationInterval: 30s
     enableAdminAPI: false
-    disableAlerting: true
+    disableAlerting: false
     serviceMonitorSelectorNilUsesHelmValues: false
     serviceMonitorSelector:
       matchLabels:
