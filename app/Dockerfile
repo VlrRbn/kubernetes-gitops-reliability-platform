@@ -4,7 +4,7 @@ ARG GO_IMAGE=golang:1.26.6-alpine3.23@sha256:5978cc992ad5ef96a7469713c8af849c143
 FROM ${GO_IMAGE} AS build
 WORKDIR /src
 
-COPY go.mod ./
+COPY go.mod go.sum ./
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 

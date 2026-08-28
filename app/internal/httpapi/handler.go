@@ -2,12 +2,13 @@ package httpapi
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"sync/atomic"
+	"strconv"
 	"time"
 
 	"github.com/VlrRbn/kubernetes-gitops-reliability-platform/app/internal/config"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type API struct {
@@ -15,18 +16,70 @@ type API struct {
 	random   func() float64
 	version  string
 	commit   string
-	requests atomic.Uint64
-	errors   atomic.Uint64
+	requests *prometheus.CounterVec
+	errors   prometheus.Counter
+	duration *prometheus.HistogramVec
 }
 
 func New(cfg config.Config, random func() float64, version, commit string) http.Handler {
-	api := &API{cfg: cfg, random: random, version: version, commit: commit}
+	registry := prometheus.NewRegistry()
+	requests := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "reliability_demo",
+		Subsystem: "http",
+		Name:      "requests_total",
+		Help:      "Requests to the application endpoint by HTTP status code.",
+	}, []string{"code"})
+	errors := prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: "reliability_demo",
+		Subsystem: "http",
+		Name:      "errors_total",
+		Help:      "Injected application errors.",
+	})
+	duration := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "reliability_demo",
+		Subsystem: "http",
+		Name:      "request_duration_seconds",
+		Help:      "Application endpoint request duration by HTTP status code.",
+		Buckets:   prometheus.DefBuckets,
+	}, []string{"code"})
+	ready := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: "reliability_demo",
+		Name:      "ready",
+		Help:      "Whether the application is configured as ready.",
+	}, func() float64 { return boolNumber(cfg.Ready) })
+	configuredDelay := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: "reliability_demo",
+		Name:      "configured_delay_milliseconds",
+		Help:      "Configured application delay in milliseconds.",
+	}, func() float64 { return float64(cfg.Delay.Milliseconds()) })
+	buildInfo := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "reliability_demo",
+		Name:      "build_info",
+		Help:      "Build identity for the running application.",
+	}, []string{"commit", "version"})
+
+	for _, code := range []string{"200", "503"} {
+		requests.WithLabelValues(code).Add(0)
+		duration.WithLabelValues(code)
+	}
+	buildInfo.WithLabelValues(commit, version).Set(1)
+	registry.MustRegister(requests, errors, duration, ready, configuredDelay, buildInfo)
+
+	api := &API{
+		cfg:      cfg,
+		random:   random,
+		version:  version,
+		commit:   commit,
+		requests: requests,
+		errors:   errors,
+		duration: duration,
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", api.root)
 	mux.HandleFunc("/healthz", api.health)
 	mux.HandleFunc("/readyz", api.ready)
-	mux.HandleFunc("/metrics", api.metrics)
+	mux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
 
 	return mux
 }
@@ -37,13 +90,21 @@ func (a *API) root(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.requests.Add(1)
+	started := time.Now()
+	status := http.StatusOK
+	defer func() {
+		code := strconv.Itoa(status)
+		a.requests.WithLabelValues(code).Inc()
+		a.duration.WithLabelValues(code).Observe(time.Since(started).Seconds())
+	}()
+
 	if a.cfg.Delay > 0 {
 		time.Sleep(a.cfg.Delay)
 	}
 
 	if a.random() < a.cfg.ErrorRate {
-		a.errors.Add(1)
+		status = http.StatusServiceUnavailable
+		a.errors.Inc()
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"status": "injected-error",
 		})
@@ -70,32 +131,15 @@ func (a *API) ready(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }
 
-func (a *API) metrics(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-	_, _ = fmt.Fprintf(w, `# HELP reliability_demo_http_requests_total Requests to the application endpoint.
-# TYPE reliability_demo_http_requests_total counter
-reliability_demo_http_requests_total %d
-# HELP reliability_demo_http_errors_total Injected application errors.
-# TYPE reliability_demo_http_errors_total counter
-reliability_demo_http_errors_total %d
-# HELP reliability_demo_ready Whether the application is configured as ready.
-# TYPE reliability_demo_ready gauge
-reliability_demo_ready %d
-# HELP reliability_demo_configured_delay_milliseconds Configured application delay in milliseconds.
-# TYPE reliability_demo_configured_delay_milliseconds gauge
-reliability_demo_configured_delay_milliseconds %d
-`, a.requests.Load(), a.errors.Load(), boolNumber(a.cfg.Ready), a.cfg.Delay.Milliseconds())
-}
-
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
 
-func boolNumber(value bool) int {
+func boolNumber(value bool) float64 {
 	if value {
-		return 1
+		return 1.0
 	}
-	return 0
+	return 0.0
 }
