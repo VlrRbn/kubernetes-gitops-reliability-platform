@@ -41,6 +41,7 @@ deploy-local: ## Deploy the local image outside the Argo-managed environments
 	  --set-string image.repository="$(IMAGE_REPOSITORY)" \
 	  --set-string image.tag="$(IMAGE_TAG)" \
 	  --set-string image.digest= \
+	  --set metrics.serviceMonitor.enabled=false \
 	  --wait \
 	  --timeout 2m
 

@@ -4,10 +4,16 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 CHART="${ROOT_DIR}/charts/reliability-demo"
+MAKEFILE="${ROOT_DIR}/Makefile"
 RENDERED="$(mktemp)"
 MONITOR_RENDERED="$(mktemp)"
 DEFAULT_RENDERED="$(mktemp)"
 trap 'rm -f "$RENDERED" "$MONITOR_RENDERED" "$DEFAULT_RENDERED"' EXIT
+
+grep -Fq -- '--set metrics.serviceMonitor.enabled=false' "$MAKEFILE" || {
+  echo "Local demo must remain independent from the ServiceMonitor CRD" >&2
+  exit 1
+}
 
 helm template reliability-demo "$CHART" \
   --namespace prod \
