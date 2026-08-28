@@ -6,7 +6,8 @@ ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 CHART="${ROOT_DIR}/charts/reliability-demo"
 RENDERED="$(mktemp)"
 MONITOR_RENDERED="$(mktemp)"
-trap 'rm -f "$RENDERED" "$MONITOR_RENDERED"' EXIT
+DEFAULT_RENDERED="$(mktemp)"
+trap 'rm -f "$RENDERED" "$MONITOR_RENDERED" "$DEFAULT_RENDERED"' EXIT
 
 helm template reliability-demo "$CHART" \
   --namespace prod \
@@ -55,7 +56,9 @@ for line in "${required_monitor_lines[@]}"; do
   }
 done
 
-grep -Fq "kind: ServiceMonitor" "$RENDERED" && {
+helm template reliability-demo "$CHART" > "$DEFAULT_RENDERED"
+
+grep -Fq "kind: ServiceMonitor" "$DEFAULT_RENDERED" && {
   echo "ServiceMonitor must remain disabled until its CRD is installed" >&2
   exit 1
 }
