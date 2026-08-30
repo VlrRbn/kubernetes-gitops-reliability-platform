@@ -14,6 +14,7 @@
         "defaults": {
           "max": 1,
           "min": 0,
+          "noValue": "No traffic",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -112,6 +113,11 @@
       },
       "fieldConfig": {
         "defaults": {
+          "custom": {
+            "axisSoftMax": 0.1,
+            "axisSoftMin": 0
+          },
+          "min": 0,
           "unit": "reqps"
         },
         "overrides": []

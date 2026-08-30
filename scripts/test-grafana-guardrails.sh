@@ -36,6 +36,8 @@ done
 required_dashboard_contracts=(
   '"uid": "reliability-demo-slos"'
   '"name": "environment"'
+  '"noValue": "No traffic"'
+  '"axisSoftMax": 0.1'
   'reliability_demo:http_availability:ratio5m'
   'reliability_demo:http_requests:rate5m'
   'reliability_demo:http_errors:rate5m'
