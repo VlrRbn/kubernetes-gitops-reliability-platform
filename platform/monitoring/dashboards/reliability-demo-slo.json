@@ -118,6 +118,20 @@
             "axisSoftMin": 0
           },
           "min": 0,
+          "noValue": "No traffic",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.001
+              }
+            ]
+          },
           "unit": "reqps"
         },
         "overrides": []
@@ -130,16 +144,17 @@
       },
       "id": 3,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "textMode": "auto"
       },
       "targets": [
         {
@@ -151,7 +166,7 @@
         }
       ],
       "title": "Error rate (5m)",
-      "type": "timeseries"
+      "type": "stat"
     },
     {
       "datasource": {
