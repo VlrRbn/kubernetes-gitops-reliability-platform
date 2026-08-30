@@ -10,7 +10,7 @@ IMAGE_TAG ?= dev
 COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || printf 'unknown')
 VERSION ?= dev
 
-.PHONY: help check image-build cluster-create image-load deploy-local smoke-test local-demo argocd-bootstrap argocd-status monitoring-bootstrap alertmanager-test kyverno-bootstrap admission-status promote cluster-delete
+.PHONY: help check image-build cluster-create image-load deploy-local smoke-test local-demo argocd-bootstrap argocd-status monitoring-bootstrap alertmanager-test grafana-password grafana-port-forward kyverno-bootstrap admission-status promote cluster-delete
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*## "; printf "Available targets:\n"} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -65,6 +65,14 @@ monitoring-bootstrap: cluster-create ## Install the pinned Prometheus foundation
 
 alertmanager-test: ## Send a synthetic alert and verify local webhook delivery
 	@CLUSTER_NAME="$(CLUSTER_NAME)" ./scripts/test-alertmanager-delivery.sh
+
+grafana-password: ## Print the generated local Grafana administrator password
+	@kubectl get secret monitoring-grafana --namespace monitoring \
+	  --output=jsonpath='{.data.admin-password}' | base64 --decode
+	@printf '\n'
+
+grafana-port-forward: ## Expose the local Grafana UI at http://localhost:3000
+	kubectl port-forward --namespace monitoring service/monitoring-grafana 3000:80
 
 kyverno-bootstrap: ## Install pinned Kyverno, audit live workloads, and enforce admission policies
 	@CLUSTER_NAME="$(CLUSTER_NAME)" ./scripts/bootstrap-kyverno.sh

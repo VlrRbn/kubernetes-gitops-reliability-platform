@@ -40,7 +40,73 @@ alertmanager:
         memory: 128Mi
 
 grafana:
-  enabled: false
+  enabled: true
+  defaultDashboardsEnabled: false
+  image:
+    registry: docker.io
+    repository: grafana/grafana
+    tag: 13.2.0
+    sha: 3fd54ae1214669f8355f065ec9f6445d5279a3d77095ab048ca045685272429b
+  initChownData:
+    enabled: false
+  persistence:
+    enabled: false
+  serviceAccount:
+    create: true
+    automountServiceAccountToken: false
+  automountServiceAccountToken: false
+  sidecar:
+    dashboards:
+      enabled: false
+    datasources:
+      enabled: false
+  serviceMonitor:
+    enabled: false
+  testFramework:
+    enabled: false
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          uid: prometheus
+          type: prometheus
+          access: proxy
+          url: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+          isDefault: true
+          editable: false
+          jsonData:
+            httpMethod: POST
+            timeInterval: 30s
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: reliability-platform
+          orgId: 1
+          folder: Reliability Platform
+          type: file
+          disableDeletion: true
+          editable: false
+          options:
+            path: /var/lib/grafana/dashboards/default
+  dashboardsConfigMaps:
+    default: reliability-demo-slo-dashboard
+  grafana.ini:
+    analytics:
+      check_for_updates: false
+      reporting_enabled: false
+    auth.anonymous:
+      enabled: false
+    users:
+      allow_sign_up: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: 250m
+      memory: 512Mi
 
 kubeStateMetrics:
   enabled: false
