@@ -10,7 +10,7 @@ requests, releases, and README sections use capability names instead.
 | GitOps Promotion | `v0.3.0` | Complete |
 | Admission Policy | `v0.4.0` | Complete |
 | Supply Chain Provenance | `v0.5.0` | Complete |
-| Observability | `v0.6.0` | Planned |
+| Observability | `v0.6.0` | Complete |
 | Reliability Platform | `v1.0.0` | Planned |
 
 ## Scope Rules
