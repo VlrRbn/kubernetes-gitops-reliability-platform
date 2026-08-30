@@ -10,10 +10,14 @@ CHART_SHA256="d98b1a1a4f286cb6022c1f059edc01a83da31e3f2dd1ee70533384151a4dc354"
 CHART="oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack"
 VALUES_FILE="${ROOT_DIR}/platform/monitoring/values.yaml"
 RULES_FILE="${ROOT_DIR}/platform/monitoring/slo-rules.yaml"
+DASHBOARD_FILE="${ROOT_DIR}/platform/monitoring/dashboards/reliability-demo-slo.json"
 WORK_DIR="$(mktemp -d)"
 CHART_FILE="${WORK_DIR}/kube-prometheus-stack-${CHART_VERSION}.tgz"
 RENDERED_FILE="${WORK_DIR}/monitoring-rendered.yaml"
+DASHBOARD_CONFIGMAP_FILE="${WORK_DIR}/grafana-dashboard-configmap.yaml"
+NAMESPACE_FILE="${WORK_DIR}/monitoring-namespace.yaml"
 OPERATOR_DEPLOYMENT="monitoring-kube-prometheus-operator"
+GRAFANA_DEPLOYMENT="monitoring-grafana"
 PROMETHEUS_STATEFULSET="prometheus-monitoring-kube-prometheus-prometheus"
 ALERTMANAGER_STATEFULSET="alertmanager-monitoring-kube-prometheus-alertmanager"
 PROMETHEUS_RULES_API="/api/v1/namespaces/monitoring/services/monitoring-kube-prometheus-prometheus:http-web/proxy/api/v1/rules"
@@ -63,7 +67,7 @@ mapfile -t rendered_images < <(
   } | sort -u
 )
 
-[[ "${#rendered_images[@]}" -eq 5 ]] || {
+[[ "${#rendered_images[@]}" -eq 6 ]] || {
   echo "Unexpected number of rendered monitoring images: ${#rendered_images[@]}" >&2
   printf '  %s\n' "${rendered_images[@]}" >&2
   exit 1
@@ -74,6 +78,21 @@ for image in "${rendered_images[@]}"; do
     exit 1
   }
 done
+
+jq empty "$DASHBOARD_FILE"
+
+step "Provisioning the version-controlled Grafana dashboard"
+kubectl create namespace monitoring \
+  --dry-run=client \
+  --output=yaml > "$NAMESPACE_FILE"
+kubectl apply --filename "$NAMESPACE_FILE"
+
+kubectl create configmap reliability-demo-slo-dashboard \
+  --namespace monitoring \
+  --from-file=reliability-demo-slo.json="$DASHBOARD_FILE" \
+  --dry-run=client \
+  --output=yaml > "$DASHBOARD_CONFIGMAP_FILE"
+kubectl apply --filename "$DASHBOARD_CONFIGMAP_FILE"
 
 step "Installing the pinned Prometheus foundation"
 helm upgrade --install monitoring "$CHART_FILE" \
@@ -87,6 +106,15 @@ kubectl rollout status \
   --namespace monitoring \
   "deployment/${OPERATOR_DEPLOYMENT}" \
   --timeout=5m
+
+kubectl rollout status \
+  --namespace monitoring \
+  "deployment/${GRAFANA_DEPLOYMENT}" \
+  --timeout=5m
+
+kubectl get --raw \
+  "/api/v1/namespaces/monitoring/services/${GRAFANA_DEPLOYMENT}:http-web/proxy/api/health" |
+  jq --exit-status '.database == "ok"' >/dev/null
 
 step "Applying SLO recording and alerting rules"
 kubectl apply --filename "$RULES_FILE"
@@ -154,7 +182,7 @@ mapfile -t live_images < <(
     jq -r '.items[] | .spec.template.spec | (.initContainers[]?.image, .containers[]?.image)' |
     sort -u
 )
-[[ "${#live_images[@]}" -eq 4 ]] || {
+[[ "${#live_images[@]}" -eq 5 ]] || {
   echo "Unexpected number of live monitoring images: ${#live_images[@]}" >&2
   printf '  %s\n' "${live_images[@]}" >&2
   exit 1
@@ -166,4 +194,16 @@ for image in "${live_images[@]}"; do
   }
 done
 
-echo "Prometheus, Alertmanager, and SLO rules are ready"
+grafana_restarts="$(
+  kubectl get pods \
+    --namespace monitoring \
+    --selector='app.kubernetes.io/name=grafana,app.kubernetes.io/instance=monitoring' \
+    --output=json |
+    jq '[.items[].status.containerStatuses[]? | select(.name == "grafana") | .restartCount] | add // 0'
+)"
+[[ "$grafana_restarts" -eq 0 ]] || {
+  echo "Grafana restarted during bootstrap: ${grafana_restarts} restart(s)" >&2
+  exit 1
+}
+
+echo "Prometheus, Alertmanager, Grafana, and SLO rules are ready"
