@@ -7,9 +7,10 @@ images, admission policy, telemetry, SLOs, and incident recovery evidence.
 ## Project Status
 
 The **Local Kubernetes Foundation**, **Secure Image Pipeline**, **GitOps
-Promotion**, and **Admission Policy** capabilities are complete. Together they
-provide a local vertical slice, pull-request evidence, controlled GHCR
-publication, environment reconciliation, and enforceable workload controls
+Promotion**, **Admission Policy**, **Supply Chain Provenance**, and
+**Observability** capabilities are complete. Together they provide a local
+vertical slice, pull-request evidence, controlled GHCR publication,
+environment reconciliation, enforceable workload controls, and SLO telemetry
 without cloud infrastructure:
 
 ```text
@@ -72,6 +73,20 @@ chart `3.8.2`, its controller images, and the test CLI are pinned and verified.
 Bootstrap audits newly introduced policies against live workloads before
 switching them to `Enforce`; see
 `docs/admission-policy.md` for the contract and acceptance procedure.
+
+## Observability And SLOs
+
+The pinned `kube-prometheus-stack` installs Prometheus, Alertmanager, and Grafana
+into the disposable kind cluster. Prometheus discovers only labeled `ServiceMonitor`
+resources in `dev`, `stage`, and `prod`. Reviewed recording rules calculate
+request rate, error rate, five-minute availability, and p95 latency; alerts cover
+sustained availability below 99% and p95 latency above 500 ms.
+
+Grafana provisions the version-controlled **Reliability Demo SLOs** dashboard
+without an editable sidecar. It shows availability, traffic, errors, latency,
+scrape health, and firing alerts for all three environments. Alertmanager uses
+a local webhook delivery contract that is exercised by a synthetic alert.
+See `docs/observability.md` for bootstrap, access, evidence, and trade-offs.
 
 ## Security Defaults
 
@@ -158,6 +173,20 @@ NAMESPACE=stage make smoke-test
 NAMESPACE=prod make smoke-test
 ```
 
+Install the pinned monitoring stack, verify local alert delivery, and access
+the provisioned Grafana dashboard:
+
+```bash
+make monitoring-bootstrap
+make alertmanager-test
+make grafana-password
+make grafana-port-forward
+```
+
+The port-forward remains attached to the terminal and exposes Grafana at
+`http://localhost:3000`.
+Sign in as `admin` with the generated password printed by `make grafana-password`.
+
 The required order is:
 
 ```text
@@ -166,6 +195,8 @@ kind cluster
   -> dev, stage, and prod workloads
   -> Kyverno Audit
   -> Kyverno Enforce
+  -> Prometheus, Alertmanager, and Grafana
+  -> SLO and alert-delivery verification
 ```
 
 `make kyverno-bootstrap` intentionally fails if Argo CD has not yet created
@@ -190,13 +221,14 @@ digest-pinned GHCR images.
 | Argo CD promotion | Complete |
 | Admission policies | Complete |
 | Signed build provenance | Complete |
-| Observability and SLOs | Planned |
+| Observability and SLOs | Complete |
 | Incident exercises | Planned |
 
 See `docs/local-foundation-acceptance.md` for the completed local contract,
 `docs/secure-image-pipeline.md` for the image delivery contract, and
 `docs/gitops-promotion.md` and `docs/admission-policy.md` for the cluster
-delivery controls. `docs/roadmap.md` contains the internal milestone map.
+delivery controls, and `docs/observability.md` for the monitoring and SLO
+contract. `docs/roadmap.md` contains the internal milestone map.
 Cosign is temporarily pinned to the reviewed `v2.6.5` compatibility line because
 the pinned Kyverno release cannot discover default Cosign v3 OCI 1.1 signature
 artifacts in GHCR. The signature policy must pass its live audit before this
