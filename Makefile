@@ -60,7 +60,7 @@ argocd-status: ## Show generated Applications and environment workloads
 	  kubectl get deployment,pod,service --namespace "$$namespace"; \
 	done
 
-monitoring-bootstrap: cluster-create ## Install the pinned Prometheus foundation
+monitoring-bootstrap: cluster-create ## Install monitoring and ServiceMonitor CRDs before Argo CD
 	@CLUSTER_NAME="$(CLUSTER_NAME)" ./scripts/bootstrap-monitoring.sh
 
 alertmanager-test: ## Send a synthetic alert and verify local webhook delivery

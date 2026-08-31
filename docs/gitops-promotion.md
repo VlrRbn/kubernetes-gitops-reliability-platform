@@ -37,9 +37,15 @@ Bootstrap only after the GitOps manifests and digest-pinned values are merged
 into `main`:
 
 ```bash
+make monitoring-bootstrap
 make argocd-bootstrap
 make argocd-status
 ```
+
+Monitoring is installed first because the application chart renders a
+`ServiceMonitor` in every environment. Argo bootstrap fails before installing
+the control plane when that CRD is missing; this prevents a clean cluster from
+creating three permanently failed sync operations.
 
 The bootstrap is idempotent for the disposable local kind cluster. It does not
 create cloud resources or expose the Argo CD API outside the cluster.
@@ -50,6 +56,7 @@ bootstrap:
 
 ```bash
 make cluster-delete
+make monitoring-bootstrap
 make argocd-bootstrap
 ```
 

@@ -114,6 +114,12 @@ jq
 
 ## Run The Local Foundation
 
+The local foundation is a standalone acceptance path, not the first step of
+the GitOps platform bootstrap. `make local-demo` builds an image on the local
+machine, loads it directly into kind, and installs a Helm release only in the
+`local-dev` namespace. It does not install Argo CD, monitoring, or Kyverno and
+does not create the GitOps-managed `dev`, `stage`, or `prod` workloads.
+
 Run checks first:
 
 ```bash
@@ -141,11 +147,14 @@ make cluster-delete
 
 ## Run The GitOps Platform
 
-The GitOps path is separate from `make local-demo`. Run the checks, create the
-kind cluster, and bootstrap Argo CD first:
+The GitOps path uses digest-pinned GHCR images and does not require
+`make local-demo`. Install the monitoring foundation before Argo CD because
+the application chart contains `ServiceMonitor` resources and a clean cluster
+does not yet have that CRD:
 
 ```bash
 make check
+make monitoring-bootstrap
 make argocd-bootstrap
 ```
 
@@ -173,11 +182,10 @@ NAMESPACE=stage make smoke-test
 NAMESPACE=prod make smoke-test
 ```
 
-Install the pinned monitoring stack, verify local alert delivery, and access
-the provisioned Grafana dashboard:
+Verify alert delivery through the installed monitoring stack and access the
+provisioned Grafana dashboard:
 
 ```bash
-make monitoring-bootstrap
 make alertmanager-test
 make grafana-password
 make grafana-port-forward
@@ -191,18 +199,23 @@ The required order is:
 
 ```text
 kind cluster
+  -> Prometheus Operator and ServiceMonitor CRDs
+  -> Prometheus, Alertmanager, and Grafana
   -> Argo CD
   -> dev, stage, and prod workloads
   -> Kyverno Audit
   -> Kyverno Enforce
-  -> Prometheus, Alertmanager, and Grafana
   -> SLO and alert-delivery verification
 ```
 
+`make argocd-bootstrap` intentionally fails when the `ServiceMonitor` CRD is
+missing instead of creating Applications that can never sync.
 `make kyverno-bootstrap` intentionally fails if Argo CD has not yet created
 the three application namespaces.
 
 Delete the complete disposable platform with `make cluster-delete`.
+This deletes the entire `gitops-reliability` kind cluster, including
+`local-dev` when the standalone local demo was run in that same cluster.
 
 ## Environment Values
 

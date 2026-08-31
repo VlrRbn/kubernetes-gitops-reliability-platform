@@ -36,21 +36,24 @@ Alerts require real traffic and remain pending for ten minutes before firing:
 
 ## Reproducible Bootstrap
 
-Argo CD must first reconcile the application into all three environments so
-that their labeled `ServiceMonitor` resources and metrics endpoints exist:
+The monitoring foundation must be installed before Argo CD so the
+`ServiceMonitor` CRD exists when the application chart first syncs. Empty
+targets are acceptable during monitoring bootstrap; Argo CD then creates the
+three workloads and their labeled monitors:
 
 ```bash
 make check
+make monitoring-bootstrap
 make argocd-bootstrap
 make argocd-status
-make monitoring-bootstrap
 ```
 
 Bootstrap accepts only the `kind-gitops-reliability` context. It verifies the
 chart checksum and image digests, waits for Prometheus, Alertmanager, Grafana,
 and the Operator, confirms that both reviewed rule groups loaded, checks the
 live Prometheus and Alertmanager configurations, and fails if Grafana restarted
-during bootstrap.
+during bootstrap. A clean first start allows up to 180 seconds for the Operator
+and Prometheus to discover and load both reviewed SLO rule groups.
 
 Run the synthetic Alertmanager delivery contract separately:
 

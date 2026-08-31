@@ -45,6 +45,12 @@ current_context="$(kubectl config current-context)"
   exit 1
 }
 
+if ! kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
+  echo "Required ServiceMonitor CRD is missing" >&2
+  echo "Run 'make monitoring-bootstrap' before 'make argocd-bootstrap'" >&2
+  exit 1
+fi
+
 if kubectl get secrets \
   --namespace dev \
   --selector 'owner=helm,name=reliability-demo' \
