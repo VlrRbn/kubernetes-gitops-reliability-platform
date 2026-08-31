@@ -1,28 +1,29 @@
 # Kubernetes GitOps Reliability Platform
 
 A portfolio-grade Kubernetes delivery and reliability project built in small,
-verifiable milestones. The final target is GitOps promotion, signed immutable
-images, admission policy, telemetry, SLOs, and incident recovery evidence.
+verifiable milestones. The implemented path combines GitOps promotion, signed
+immutable images, admission policy, telemetry, SLOs, and incident recovery
+evidence in one reproducible local platform.
 
 ## Project Status
 
 The **Local Kubernetes Foundation**, **Secure Image Pipeline**, **GitOps
 Promotion**, **Admission Policy**, **Supply Chain Provenance**, and
-**Observability** capabilities are complete. Together they provide a local
-vertical slice, pull-request evidence, controlled GHCR publication,
-environment reconciliation, enforceable workload controls, and SLO telemetry
-without cloud infrastructure:
+**Observability**, and **Incident Recovery** capabilities are complete.
+Together they provide pull-request evidence, controlled GHCR publication,
+environment reconciliation, enforceable workload controls, SLO telemetry, and
+measured recovery without cloud infrastructure:
 
 ```text
-Go service
-  -> hardened multi-stage container
-  -> local kind image
-  -> Helm release in namespace local-dev
-  -> health/readiness/application/metrics smoke test
+reviewed source
+  -> scanned, signed, digest-pinned image
+  -> ordered GitOps promotion through dev, stage, and prod
+  -> fail-closed admission controls
+  -> Prometheus SLOs, Alertmanager, and Grafana
+  -> controlled recovery drill and reviewable evidence
 ```
 
-The service intentionally supports controlled failure modes for later SRE
-exercises:
+The service intentionally supports controlled failure modes for repeatable SRE exercises:
 
 | Variable | Default | Contract |
 | --- | ---: | --- |
@@ -87,6 +88,19 @@ without an editable sidecar. It shows availability, traffic, errors, latency,
 scrape health, and firing alerts for all three environments. Alertmanager uses
 a local webhook delivery contract that is exercised by a synthetic alert.
 See `docs/observability.md` for bootstrap, access, evidence, and trade-offs.
+
+## Incident Recovery
+
+The recovery drill deletes exactly one Ready application Pod in `dev`, observes
+the Deployment controller create a replacement with the same immutable image,
+and measures recovery time. It fails closed unless the local kind context,
+Argo CD state, Kyverno policies, Deployment availability, image digest, and
+exact operator confirmation all match the reviewed contract.
+
+Successful recovery still requires `Synced / Healthy` Argo CD state, clean
+Kyverno reports, and a passing smoke test. The verified clean-cluster exercise
+recovered in four seconds; see `docs/pod-recovery-drill.md` and
+`evidence/platform-acceptance-20260831.md`.
 
 ## Security Defaults
 
@@ -195,6 +209,14 @@ The port-forward remains attached to the terminal and exposes Grafana at
 `http://localhost:3000`.
 Sign in as `admin` with the generated password printed by `make grafana-password`.
 
+The recovery drill is optional and destructive within the disposable `dev`
+namespace. Run it only after the platform is healthy and only with the exact
+confirmation phrase:
+
+```bash
+CONFIRM_POD_DELETE='DELETE ONE DEV POD' make pod-recovery-drill
+```
+
 The required order is:
 
 ```text
@@ -235,13 +257,15 @@ digest-pinned GHCR images.
 | Admission policies | Complete |
 | Signed build provenance | Complete |
 | Observability and SLOs | Complete |
-| Incident exercises | Planned |
+| Incident recovery exercise | Complete |
 
 See `docs/local-foundation-acceptance.md` for the completed local contract,
 `docs/secure-image-pipeline.md` for the image delivery contract, and
 `docs/gitops-promotion.md` and `docs/admission-policy.md` for the cluster
 delivery controls, and `docs/observability.md` for the monitoring and SLO
-contract. `docs/roadmap.md` contains the internal milestone map.
+contract. `docs/pod-recovery-drill.md` defines the recovery exercise, while
+`evidence/platform-acceptance-20260831.md` records the complete clean-cluster
+acceptance. `docs/roadmap.md` contains the internal milestone map.
 Cosign is temporarily pinned to the reviewed `v2.6.5` compatibility line because
 the pinned Kyverno release cannot discover default Cosign v3 OCI 1.1 signature
 artifacts in GHCR. The signature policy must pass its live audit before this
@@ -255,3 +279,18 @@ The local demo and control-plane bootstraps operate only on a kind cluster named
 `gitops-reliability`; they do not push images, access AWS, or deploy cloud
 infrastructure. GHCR publication happens only in GitHub Actions after a commit
 reaches `main`.
+
+The automated recovery drill is restricted to one Pod in `dev` and requires
+explicit operator confirmation. The application's configurable delay, error,
+and readiness controls are not activated automatically.
+
+## Production Boundaries
+
+This repository demonstrates production-style controls on a single-node,
+disposable kind cluster. Prometheus, Alertmanager, and Grafana use single replicas
+and ephemeral storage. Alertmanager routes only to an in-cluster test receiver.
+Application GitOps is declarative, while the local Argo CD, monitoring, and Kyverno
+control planes are bootstrapped imperatively. Keyless verification depends on public
+GitHub OIDC, GHCR, and Sigstore services. Multi-node and zone failure, persistent-data
+recovery, external paging, long-term telemetry, and zero-downtime guarantees
+remain outside the verified boundary.

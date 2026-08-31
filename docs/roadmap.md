@@ -11,7 +11,7 @@ requests, releases, and README sections use capability names instead.
 | Admission Policy | `v0.4.0` | Complete |
 | Supply Chain Provenance | `v0.5.0` | Complete |
 | Observability | `v0.6.0` | Complete |
-| Reliability Platform | `v1.0.0` | Planned |
+| Reliability Platform | `v1.0.0` | Complete |
 
 ## Scope Rules
 

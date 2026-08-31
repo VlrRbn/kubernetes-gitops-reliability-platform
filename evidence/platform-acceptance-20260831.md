@@ -88,6 +88,10 @@ It records:
 
 ## Scope And Interpretation
 
-This evidence demonstrates reproducible single-node lab bootstrap, GitOps reconciliation,
-enforced workload policy, local telemetry and alert routing, and controller-driven
-recovery from one Pod deletion.
+This evidence demonstrates reproducible single-node lab bootstrap, GitOps
+reconciliation, enforced workload policy, local telemetry and alert routing,
+and controller-driven recovery from one Pod deletion. It does not claim
+multi-node or availability-zone resilience, persistent-data recovery,
+high-availability monitoring, external paging delivery, or zero downtime. Dev
+runs one replica, so a short interruption during the recovery drill is an
+expected limitation.
