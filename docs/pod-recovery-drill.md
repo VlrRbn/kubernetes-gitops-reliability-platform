@@ -60,4 +60,7 @@ policy result, and smoke-test result.
 ## Interpretation
 
 This exercise proves that a Deployment can replace one failed Pod and restore
-the application contract in the disposable lab.
+the application contract in the disposable lab. It does not prove multi-node
+survival, zone resilience, persistent-data recovery, or production incident
+response. Dev runs one replica, so the exercise may produce a brief availability
+interruption.
