@@ -60,6 +60,7 @@ done
 "${SCRIPT_DIR}/test-slo-rules.sh"
 "${SCRIPT_DIR}/test-alertmanager-guardrails.sh"
 "${SCRIPT_DIR}/test-grafana-guardrails.sh"
+"${SCRIPT_DIR}/test-pod-recovery-drill.sh"
 "${SCRIPT_DIR}/test-signature-policy-guardrails.sh"
 "${SCRIPT_DIR}/test-admission-policies.sh"
 
