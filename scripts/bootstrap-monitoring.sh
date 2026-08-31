@@ -21,6 +21,8 @@ GRAFANA_DEPLOYMENT="monitoring-grafana"
 PROMETHEUS_STATEFULSET="prometheus-monitoring-kube-prometheus-prometheus"
 ALERTMANAGER_STATEFULSET="alertmanager-monitoring-kube-prometheus-alertmanager"
 PROMETHEUS_RULES_API="/api/v1/namespaces/monitoring/services/monitoring-kube-prometheus-prometheus:http-web/proxy/api/v1/rules"
+RULES_LOAD_ATTEMPTS=90
+RULES_LOAD_POLL_SECONDS=2
 
 cleanup() {
   rm -rf "$WORK_DIR"
@@ -144,7 +146,7 @@ kubectl rollout status \
   --timeout=5m
 
 rules_loaded=false
-for _ in $(seq 1 30); do
+for _ in $(seq 1 "$RULES_LOAD_ATTEMPTS"); do
   if kubectl get --raw "$PROMETHEUS_RULES_API" 2>/dev/null |
     jq --exit-status '
       [.data.groups[]?.name] as $groups |
@@ -154,10 +156,10 @@ for _ in $(seq 1 30); do
     rules_loaded=true
     break
   fi
-  sleep 2
+  sleep "$RULES_LOAD_POLL_SECONDS"
 done
 [[ "$rules_loaded" == true ]] || {
-  echo "Prometheus did not load both reviewed SLO rule groups" >&2
+  echo "Prometheus did not load both reviewed SLO rule groups within $((RULES_LOAD_ATTEMPTS * RULES_LOAD_POLL_SECONDS)) seconds" >&2
   exit 1
 }
 

@@ -70,6 +70,8 @@ required_bootstrap_contracts=(
   'kubectl rollout status "$deployment"'
   'admin.enabled'
   'owner=helm,name=reliability-demo'
+  'kubectl get crd servicemonitors.monitoring.coreos.com'
+  "Run 'make monitoring-bootstrap' before 'make argocd-bootstrap'"
 )
 
 for contract in "${required_bootstrap_contracts[@]}"; do
@@ -78,6 +80,13 @@ for contract in "${required_bootstrap_contracts[@]}"; do
     exit 1
   }
 done
+
+crd_check_line="$(grep -nF 'kubectl get crd servicemonitors.monitoring.coreos.com' "$BOOTSTRAP" | cut -d: -f1)"
+manifest_download_line="$(grep -nF 'curl --fail --location --silent --show-error' "$BOOTSTRAP" | cut -d: -f1)"
+[[ -n "$crd_check_line" && -n "$manifest_download_line" && "$crd_check_line" -lt "$manifest_download_line" ]] || {
+  echo "Argo CD bootstrap must check the ServiceMonitor CRD before downloading or applying Argo CD" >&2
+  exit 1
+}
 
 grep -Eq 'kubectl apply[^\n]*https?://' "$BOOTSTRAP" && {
   echo "Argo CD bootstrap applies an unverified remote URL" >&2

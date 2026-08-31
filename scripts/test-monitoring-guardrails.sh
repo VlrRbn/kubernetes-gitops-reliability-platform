@@ -24,6 +24,9 @@ required_bootstrap_contracts=(
   'kubectl get --raw "$PROMETHEUS_RULES_API"'
   'reliability-demo.slo.recording'
   'reliability-demo.slo.alerts'
+  'RULES_LOAD_ATTEMPTS=90'
+  'RULES_LOAD_POLL_SECONDS=2'
+  'RULES_LOAD_ATTEMPTS * RULES_LOAD_POLL_SECONDS'
   '/bin/promtool check config /etc/prometheus/config_out/prometheus.env.yaml'
   'Live monitoring image is not digest-pinned'
 )
