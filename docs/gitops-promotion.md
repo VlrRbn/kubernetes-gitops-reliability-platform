@@ -80,9 +80,21 @@ make promote TARGET_ENV=prod IMAGE_COMMIT=<same-full-commit-sha>
 ```
 
 The promotion command resolves the digest from public GHCR instead of trusting
-user-supplied digest text. Stage requires the exact tag and digest already in
-dev; prod requires the exact identity already in stage. CI resolves every
-configured tag again and rejects a tag/digest mismatch before merge.
+user-supplied digest text. Before inspecting promotion order or changing the
+target environment, it verifies the exact `repository@digest` with Cosign
+`v2.6.5`, requiring the `secure-image.yml` identity on `main` and the GitHub
+Actions OIDC issuer. An unsigned image, identity or issuer mismatch, registry error,
+empty verification result, or unreviewed local Cosign version fails closed and
+leaves the target values byte-for-byte unchanged.
+
+Local promotion therefore requires reviewed Cosign `v2.6.5` and `jq` on `PATH`.
+The verifier binary is injectable with `COSIGN_BIN` for deterministic contract tests,
+but its reported version must still be `v2.6.5`.
+
+Stage requires the exact tag and digest already in dev; prod requires the exact
+identity already in stage. PR CI resolves every configured tag again and also
+verifies the trusted signature for each actual `dev`, `stage`, and `prod`
+digest before merge.
 
 Each environment is intentionally promoted in a separate PR. That makes the
 Git history the promotion audit trail and allows health evidence to be checked

@@ -38,6 +38,10 @@ Invalid values fail closed during startup and through Helm schema validation.
 
 Every pull request runs the project checks, builds the image, blocks on
 `HIGH`/`CRITICAL` Trivy findings, and generates an SPDX JSON SBOM.
+A pinned Cosign `v2.6.5` verifier also checks the exact configured
+`repository@digest` in `dev`, `stage`, and `prod` against the trusted workflow
+identity and GitHub OIDC issuer. This verification is read-only and does not
+receive `id-token: write`.
 A separate job publishes the exact reviewed image only after the commit reaches `main`.
 Images use `sha-<full-commit-sha>` tags; the pipeline does not publish `latest`.
 The same pinned scan runs daily with a refreshed vulnerability database so new
@@ -59,7 +63,9 @@ implemented and live enforcement acceptance is complete. See
 
 Argo CD reconciles digest-pinned Helm releases for `dev`, `stage`, and `prod`
 from protected `main`. Promotion resolves the public GHCR digest and enforces
-the order `dev → stage → prod`; each environment change remains a separate PR.
+its trusted signature before changing an environment values file. It then
+enforces the order `dev → stage → prod`; each environment change remains a
+separate PR. Failed or unverifiable signatures leave the target file unchanged.
 The restricted AppProject denies cluster-scoped resources and permits only the
 chart's `Deployment` and `Service` resources. See
 `docs/gitops-promotion.md` for bootstrap, promotion, and deletion trade-offs.

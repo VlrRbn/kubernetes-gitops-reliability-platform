@@ -54,6 +54,8 @@ done
 
 "${SCRIPT_DIR}/test-chart-guardrails.sh"
 "${SCRIPT_DIR}/test-workflow-guardrails.sh"
+"${SCRIPT_DIR}/test-image-signature-verifier.sh"
+"${SCRIPT_DIR}/test-environment-image-verification.sh"
 "${SCRIPT_DIR}/test-gitops-guardrails.sh"
 "${SCRIPT_DIR}/test-promotion-guardrails.sh"
 "${SCRIPT_DIR}/test-monitoring-guardrails.sh"
