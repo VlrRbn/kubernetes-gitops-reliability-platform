@@ -6,12 +6,14 @@ publishes only after the same commit reaches `main`.
 ## Delivery Contract
 
 1. Run the Go, Helm, shell, and negative guardrail tests.
-2. Build one local image tagged with the full commit SHA.
-3. Fail on any `HIGH` or `CRITICAL` Trivy finding, including unfixed findings.
-4. Generate an SPDX JSON SBOM with a pinned Syft release.
-5. Export the scanned image as a short-lived workflow artifact.
-6. On `main` only, load that artifact and publish it to GHCR.
-7. Sign the exact registry digest with a keyless GitHub OIDC identity and verify
+2. Install reviewed Cosign `v2.6.5` and verify the configured `dev`, `stage`,
+   and `prod` repository digests against the trusted signer identity and issuer.
+3. Build one local image tagged with the full commit SHA.
+4. Fail on any `HIGH` or `CRITICAL` Trivy finding, including unfixed findings.
+5. Generate an SPDX JSON SBOM with a pinned Syft release.
+6. Export the scanned image as a short-lived workflow artifact.
+7. On `main` only, load that artifact and publish it to GHCR.
+8. Sign the exact registry digest with a keyless GitHub OIDC identity and verify
    the resulting signature before the publish job succeeds.
 
 The published identity is:
@@ -24,7 +26,9 @@ The pipeline does not publish a mutable `latest` tag. The publish job is the
 only job granted `packages: write`; pull-request jobs retain read-only repository
 permissions. The same trusted job alone receives `id-token: write`, which is
 required for short-lived keyless signing and is never available to pull-request
-jobs. All referenced actions use full commit SHAs with reviewed version comments.
+jobs. Pull-request signature verification uses only public registry data and
+read-only repository permissions. All referenced actions use full commit SHAs
+with reviewed version comments.
 
 Cosign verification requires both the GitHub Actions issuer and the exact
 `secure-image.yml` workflow identity on `main`. The workflow signs the digest
@@ -44,6 +48,8 @@ before an unrelated pull request is merged.
 Scheduled and manual runs never publish an image because publication requires a
 `push` event on `main`. Their concurrency key includes the event type, so they
 cannot cancel an in-progress pull-request check or trusted publication run.
+Only superseded pull-request runs are cancellable. A trusted publication that
+has started on `main` is never cancelled by a newer commit.
 
 ## Evidence And Retention
 
@@ -79,5 +85,7 @@ non-blocking vulnerability scan, ignored unfixed findings, a mutable image tag,
 publication outside `main`, and a missing pull-request trigger.
 Negative cases also reject missing signing OIDC permission, signing a tag
 instead of the published digest, a permissive signer identity, and missing
-issuer verification. The contract also rejects a Cosign version that differs
-from the reviewed Kyverno-compatible `v2.6.5` pin.
+issuer verification. They reject `continue-on-error: true` or a disabled
+Trivy, signing, or verification step, and reject cancellable trusted main
+publication. The contract also rejects a Cosign version that differs from the
+reviewed Kyverno-compatible `v2.6.5` pin.

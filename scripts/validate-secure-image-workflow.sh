@@ -16,6 +16,30 @@ require_literal() {
   grep -Fq -- "$value" "$WORKFLOW" || fail "$reason"
 }
 
+step_block() {
+  local step_name="$1"
+  awk -v marker="      - name: ${step_name}" '
+    $0 == marker { in_step = 1 }
+    in_step && $0 != marker && /^      - name:/ { exit }
+    in_step { print }
+  ' "$WORKFLOW"
+}
+
+require_blocking_security_step() {
+  local step_name="$1"
+  local failure_reason="$2"
+  local block
+
+  block="$(step_block "$step_name")"
+  [[ -n "$block" ]] || fail "Security-critical workflow step is missing: $step_name"
+  if grep -Eq '^[[:space:]]+continue-on-error:[[:space:]]*true[[:space:]]*$' <<< "$block"; then
+    fail "$failure_reason"
+  fi
+  if grep -Eq '^[[:space:]]+if:' <<< "$block"; then
+    fail "Security-critical workflow steps must not be disabled or conditionally skipped: $step_name"
+  fi
+}
+
 [[ -f "$WORKFLOW" ]] || fail "Secure image workflow not found: $WORKFLOW"
 
 grep -Eq '^  pull_request:[[:space:]]*$' "$WORKFLOW" || fail "Pull request checks are required"
@@ -30,6 +54,10 @@ grep -Fq 'pull_request_target:' "$WORKFLOW" && fail "pull_request_target is forb
 # shellcheck disable=SC2016
 require_literal '  group: secure-image-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}' \
   "Scheduled scans must not cancel pull request or publication workflows"
+# Only superseded pull request checks may be cancelled. A trusted main
+# publication must complete once it has started.
+require_literal "  cancel-in-progress: \${{ github.event_name == 'pull_request' }}" \
+  "Trusted main publication must not be cancellable"
 
 while IFS= read -r action; do
   grep -Eq '^[[:space:]]+uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}[[:space:]]+# v[0-9]' <<< "$action" ||
@@ -51,6 +79,15 @@ require_literal "  GO_VERSION: 1.26.6" "Go must be pinned to the reviewed versio
 require_literal "  TRIVY_VERSION: v0.73.0" "Trivy must be pinned to the reviewed version v0.73.0"
 require_literal "  SYFT_VERSION: v1.50.0" "Syft must be pinned to the reviewed version v1.50.0"
 require_literal "  COSIGN_VERSION: v2.6.5" "Cosign must be pinned to the reviewed Kyverno-compatible version v2.6.5"
+require_blocking_security_step \
+  "Scan image for high and critical vulnerabilities" \
+  "Trivy scan failures must block the workflow"
+require_blocking_security_step \
+  "Sign published image identity" \
+  "Cosign signing failures must block the workflow"
+require_blocking_security_step \
+  "Verify published image signature" \
+  "Signature verification failures must block the workflow"
 require_literal '          exit-code: "1"' "Trivy findings must fail the workflow"
 require_literal "          ignore-unfixed: false" "Unfixed vulnerabilities must not be ignored"
 require_literal "          severity: HIGH,CRITICAL" "Trivy must block HIGH and CRITICAL vulnerabilities"
@@ -84,9 +121,15 @@ require_literal '          CERTIFICATE_IDENTITY: https://github.com/${{ github.r
 require_literal '          CERTIFICATE_OIDC_ISSUER: https://token.actions.githubusercontent.com' \
   "The signer issuer must be restricted to GitHub Actions OIDC"
 require_literal "      - name: Verify immutable environment images" \
-  "CI must verify every environment image against GHCR"
+  "CI must verify every environment image against GHCR and its trusted signature"
 require_literal "        run: ./scripts/verify-environment-images.sh" \
-  "CI must run immutable environment image verification"
+  "CI must run signed environment image verification"
+require_literal "      - name: Install Cosign for environment verification" \
+  "CI must install reviewed Cosign before environment signature verification"
+# The validator must match the GitHub Actions expression literally.
+# shellcheck disable=SC2016
+[[ "$(grep -Fc '          cosign-release: ${{ env.COSIGN_VERSION }}' "$WORKFLOW")" -eq 2 ]] ||
+  fail "Both environment verification and publication must use the reviewed Cosign release"
 
 grep -Eq '(^|[^[:alnum:]_-])latest([^[:alnum:]_-]|$)' "$WORKFLOW" &&
   fail "Mutable latest image references are forbidden"

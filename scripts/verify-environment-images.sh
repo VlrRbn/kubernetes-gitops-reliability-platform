@@ -7,12 +7,16 @@ ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/image-values.sh"
 GITOPS_ROOT="${GITOPS_ROOT:-${ROOT_DIR}/gitops/environments}"
 DIGEST_RESOLVER="${DIGEST_RESOLVER:-${SCRIPT_DIR}/resolve-ghcr-digest.sh}"
+SIGNATURE_VERIFIER="${SIGNATURE_VERIFIER:-${SCRIPT_DIR}/verify-image-signature.sh}"
 EXPECTED_REPOSITORY="ghcr.io/vlrrbn/kubernetes-gitops-reliability-platform"
 
 fail() {
   echo "FAIL: $*" >&2
   exit 1
 }
+
+[[ -x "$DIGEST_RESOLVER" ]] || fail "Digest resolver is not executable: $DIGEST_RESOLVER"
+[[ -x "$SIGNATURE_VERIFIER" ]] || fail "Signature verifier is not executable: $SIGNATURE_VERIFIER"
 
 for environment in dev stage prod; do
   values_file="${GITOPS_ROOT}/${environment}/values.yaml"
@@ -30,6 +34,9 @@ for environment in dev stage prod; do
     fail "Unable to resolve ${environment} image from GHCR"
   [[ "$resolved_digest" == "$configured_digest" ]] ||
     fail "Configured digest does not match GHCR for ${environment}"
+
+  "$SIGNATURE_VERIFIER" "$repository" "$configured_digest" ||
+    fail "Trusted signature verification failed for ${environment}"
 
   echo "Verified ${environment}: ${repository}:${tag}@${configured_digest}"
 done

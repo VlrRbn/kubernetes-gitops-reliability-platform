@@ -57,6 +57,16 @@ expect_rejected \
   "${TEST_DIR}/shared-main-concurrency.yml" \
   "Scheduled scans must not cancel pull request or publication workflows"
 
+cp "$WORKFLOW" "${TEST_DIR}/cancellable-main-publication.yml"
+# The mutation targets the literal GitHub Actions expression.
+# shellcheck disable=SC2016
+sed -i "s/cancel-in-progress: \${{ github.event_name == 'pull_request' }}/cancel-in-progress: true/" \
+  "${TEST_DIR}/cancellable-main-publication.yml"
+expect_rejected \
+  "cancellable trusted main publication" \
+  "${TEST_DIR}/cancellable-main-publication.yml" \
+  "Trusted main publication must not be cancellable"
+
 cp "$WORKFLOW" "${TEST_DIR}/outdated-go-version.yml"
 sed -i 's/GO_VERSION: 1.26.6/GO_VERSION: 1.26.5/' \
   "${TEST_DIR}/outdated-go-version.yml"
@@ -86,6 +96,68 @@ expect_rejected \
   "non-blocking vulnerability scan" \
   "${TEST_DIR}/non-blocking-scan.yml" \
   "Trivy findings must fail the workflow"
+
+cp "$WORKFLOW" "${TEST_DIR}/continue-on-error-trivy.yml"
+sed -i '/name: Scan image for high and critical vulnerabilities/a\        continue-on-error: true' \
+  "${TEST_DIR}/continue-on-error-trivy.yml"
+expect_rejected \
+  "continue-on-error on Trivy scan" \
+  "${TEST_DIR}/continue-on-error-trivy.yml" \
+  "Trivy scan failures must block the workflow"
+
+cp "$WORKFLOW" "${TEST_DIR}/continue-on-error-signing.yml"
+sed -i '/name: Sign published image identity/a\        continue-on-error: true' \
+  "${TEST_DIR}/continue-on-error-signing.yml"
+expect_rejected \
+  "continue-on-error on Cosign signing" \
+  "${TEST_DIR}/continue-on-error-signing.yml" \
+  "Cosign signing failures must block the workflow"
+
+cp "$WORKFLOW" "${TEST_DIR}/continue-on-error-verification.yml"
+sed -i '/name: Verify published image signature/a\        continue-on-error: true' \
+  "${TEST_DIR}/continue-on-error-verification.yml"
+expect_rejected \
+  "continue-on-error on signature verification" \
+  "${TEST_DIR}/continue-on-error-verification.yml" \
+  "Signature verification failures must block the workflow"
+
+for security_step in \
+  "Scan image for high and critical vulnerabilities" \
+  "Sign published image identity" \
+  "Verify published image signature"; do
+  case_name="$(tr '[:upper:] ' '[:lower:]-' <<< "$security_step")"
+  candidate="${TEST_DIR}/disabled-${case_name}.yml"
+  cp "$WORKFLOW" "$candidate"
+  sed -i "/name: ${security_step}/a\\        if: false" "$candidate"
+  expect_rejected \
+    "disabled security step: ${security_step}" \
+    "$candidate" \
+    "Security-critical workflow steps must not be disabled or conditionally skipped: ${security_step}"
+done
+
+cp "$WORKFLOW" "${TEST_DIR}/missing-trivy-step.yml"
+sed -i '/      - name: Scan image for high and critical vulnerabilities/,/      - name: Generate SPDX JSON SBOM/{/      - name: Generate SPDX JSON SBOM/!d;}' \
+  "${TEST_DIR}/missing-trivy-step.yml"
+expect_rejected \
+  "missing Trivy security step" \
+  "${TEST_DIR}/missing-trivy-step.yml" \
+  "Security-critical workflow step is missing: Scan image for high and critical vulnerabilities"
+
+cp "$WORKFLOW" "${TEST_DIR}/missing-signing-step.yml"
+sed -i '/      - name: Sign published image identity/,/      - name: Verify published image signature/{/      - name: Verify published image signature/!d;}' \
+  "${TEST_DIR}/missing-signing-step.yml"
+expect_rejected \
+  "missing Cosign signing step" \
+  "${TEST_DIR}/missing-signing-step.yml" \
+  "Security-critical workflow step is missing: Sign published image identity"
+
+cp "$WORKFLOW" "${TEST_DIR}/missing-verification-step.yml"
+sed -i '/      - name: Verify published image signature/,/      - name: Record published identity/{/      - name: Record published identity/!d;}' \
+  "${TEST_DIR}/missing-verification-step.yml"
+expect_rejected \
+  "missing signature verification step" \
+  "${TEST_DIR}/missing-verification-step.yml" \
+  "Security-critical workflow step is missing: Verify published image signature"
 
 cp "$WORKFLOW" "${TEST_DIR}/ignore-unfixed.yml"
 sed -i 's/ignore-unfixed: false/ignore-unfixed: true/' "${TEST_DIR}/ignore-unfixed.yml"
@@ -124,7 +196,15 @@ sed -i '\|run: ./scripts/verify-environment-images\.sh|d' \
 expect_rejected \
   "missing environment image verification" \
   "${TEST_DIR}/missing-image-verification.yml" \
-  "CI must run immutable environment image verification"
+  "CI must run signed environment image verification"
+
+cp "$WORKFLOW" "${TEST_DIR}/missing-environment-cosign.yml"
+sed -i '/name: Install Cosign for environment verification/,+3d' \
+  "${TEST_DIR}/missing-environment-cosign.yml"
+expect_rejected \
+  "missing reviewed Cosign for environment verification" \
+  "${TEST_DIR}/missing-environment-cosign.yml" \
+  "CI must install reviewed Cosign before environment signature verification"
 
 cp "$WORKFLOW" "${TEST_DIR}/hardcoded-image-version.yml"
 # The mutation targets a literal GitHub Actions expression.

@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: secure-image-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   GO_VERSION: 1.26.6
@@ -46,6 +46,11 @@ jobs:
 
       - name: Run project checks
         run: make check
+
+      - name: Install Cosign for environment verification
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
 
       - name: Verify immutable environment images
         run: ./scripts/verify-environment-images.sh
