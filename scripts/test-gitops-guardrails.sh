@@ -6,8 +6,11 @@ ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 PROJECT="${ROOT_DIR}/platform/argocd/project.yaml"
 APPLICATION_SET="${ROOT_DIR}/platform/argocd/applicationset.yaml"
 BOOTSTRAP="${ROOT_DIR}/scripts/bootstrap-argocd.sh"
+STRUCTURAL_VALIDATOR="${SCRIPT_DIR}/validate-gitops-boundaries.sh"
 RENDER_DIR="$(mktemp -d)"
 trap 'rm -rf "$RENDER_DIR"' EXIT
+
+"$STRUCTURAL_VALIDATOR" "$PROJECT" "$APPLICATION_SET"
 
 required_project_contracts=(
   "https://github.com/VlrRbn/kubernetes-gitops-reliability-platform.git"

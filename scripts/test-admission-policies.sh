@@ -30,4 +30,6 @@ docker run --rm \
   "$KYVERNO_CLI_IMAGE" \
   test . --registry
 
+"${SCRIPT_DIR}/test-signature-container-coverage.sh"
+
 echo "Admission policy positive and negative tests passed"

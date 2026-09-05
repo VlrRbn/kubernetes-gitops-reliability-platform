@@ -18,8 +18,8 @@ does not run `kubectl` or Helm against an environment cluster.
 - The built-in Argo CD admin account is disabled after bootstrap.
 - The AppProject accepts only this repository and the `dev`, `stage`, and
   `prod` namespaces.
-- Argo may reconcile only `Deployment` and `Service` resources. Cluster-scoped
-  resources are denied.
+- Argo may reconcile only `Deployment`, `Service`, and `ServiceMonitor`
+  resources. Cluster-scoped resources are denied.
 - Environment namespaces are bootstrap-owned, so Argo cannot prune them.
 - ApplicationSet deletion preserves generated workloads.
 - The imperative local demo uses `local-dev`; it never competes with Argo for
@@ -94,7 +94,10 @@ but its reported version must still be `v2.6.5`.
 Stage requires the exact tag and digest already in dev; prod requires the exact
 identity already in stage. PR CI resolves every configured tag again and also
 verifies the trusted signature for each actual `dev`, `stage`, and `prod`
-digest before merge.
+digest before merge. It compares the pull request base and checked revision,
+allows only one environment values file to change, and rejects stage or prod
+changes whose image identity is absent from the preceding environment. Within
+that values file, a promotion may change only repository, tag, and digest.
 
 Each environment is intentionally promoted in a separate PR. That makes the
 Git history the promotion audit trail and allows health evidence to be checked

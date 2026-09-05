@@ -39,13 +39,17 @@ make admission-status
 The bootstrap accepts only the `kind-gitops-reliability` context. It waits for
 the Kyverno policy webhooks with bounded server-side dry runs instead of assuming
 that Helm readiness means the webhooks already accept traffic. Each policy that
-does not yet exist is first applied in `Audit`; bootstrap waits until all three
-namespaces have reports for every new policy and requires zero failures before
-applying the repository version in `Enforce`. A timeout or violation removes
-only the temporary policies introduced by that run and fails closed. Existing
-enforced policies must match the repository exactly and are never downgraded or
-silently replaced. A changed existing policy requires a new disposable cluster
-and a fresh audit.
+does not yet exist is first applied in `Audit`; bootstrap snapshots every
+Deployment, ReplicaSet, and Pod in all three managed namespaces, then requires a
+fresh `pass` result for every workload UID-and-policy pair. Results created
+before the current audit and reports for replaced workload UIDs do not satisfy
+coverage. Missing coverage and every `fail`, `warn`, `error`, or `skip` outcome
+block enforcement. Only a complete, clean report set allows the repository version
+to be applied in `Enforce`. A timeout or violation removes only policies that are
+confirmed to remain in `Audit`; an interrupted transition retains any policy already
+changed to `Enforce` for operator inspection. Existing enforced policies must match
+the repository exactly and are never downgraded or silently replaced. A changed
+existing policy requires a new disposable cluster and a fresh audit.
 
 The audit includes inactive controller revisions such as zero-replica
 ReplicaSets. An unsigned historical revision therefore blocks signature-policy

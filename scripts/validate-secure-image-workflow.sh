@@ -4,6 +4,10 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 WORKFLOW="${1:-${ROOT_DIR}/.github/workflows/secure-image.yml}"
+STRUCTURE_DIR="$(mktemp -d)"
+STRUCTURE_JSON="${STRUCTURE_DIR}/workflow.json"
+
+trap 'rm -rf "$STRUCTURE_DIR"' EXIT
 
 fail() {
   echo "FAIL: $*" >&2
@@ -25,6 +29,120 @@ step_block() {
   ' "$WORKFLOW"
 }
 
+job_block() {
+  local job_name="$1"
+  awk -v marker="  ${job_name}:" '
+    $0 == marker { in_job = 1 }
+    in_job && $0 != marker && /^  [[:alnum:]_-]+:[[:space:]]*$/ { exit }
+    in_job { print }
+  ' "$WORKFLOW"
+}
+
+validate_permission_structure() {
+  for command in helm python3; do
+    command -v "$command" >/dev/null 2>&1 ||
+      fail "${command} is required for structural workflow permission validation"
+  done
+
+  mkdir -p "${STRUCTURE_DIR}/files" "${STRUCTURE_DIR}/templates"
+  printf '%s\n' \
+    'apiVersion: v2' \
+    'name: secure-image-workflow-validator' \
+    'version: 0.1.0' \
+    > "${STRUCTURE_DIR}/Chart.yaml"
+  cp "$WORKFLOW" "${STRUCTURE_DIR}/files/workflow.yml"
+  # These are literal Helm template expressions, not shell expansions.
+  # shellcheck disable=SC2016
+  printf '%s\n' \
+    '{{- .Files.Get "files/workflow.yml" | fromYaml | toJson }}' \
+    > "${STRUCTURE_DIR}/templates/workflow.yaml"
+
+  if ! helm template secure-image-workflow-validator "$STRUCTURE_DIR" > "$STRUCTURE_JSON"; then
+    fail "Secure image workflow YAML could not be parsed structurally"
+  fi
+
+  python3 - "$STRUCTURE_JSON" <<'PYTHON'
+import json
+import sys
+
+
+def fail(reason):
+    print(f"FAIL: {reason}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+workflow = None
+with open(sys.argv[1], encoding="utf-8") as rendered:
+    for line in rendered:
+        line = line.strip()
+        if line.startswith("{"):
+            workflow = json.loads(line)
+            break
+
+if not isinstance(workflow, dict) or "Error" in workflow:
+    fail("Secure image workflow YAML could not be parsed structurally")
+
+permissions = workflow.get("permissions")
+if permissions == "write-all":
+    fail("permissions: write-all is forbidden at every workflow scope")
+if permissions == "read-all":
+    fail("permissions: read-all is forbidden; permissions must be explicit")
+
+jobs = workflow.get("jobs")
+if not isinstance(jobs, dict) or set(jobs) != {"checks", "image", "publish"}:
+    fail("Workflow must contain exactly the reviewed checks, image, and publish jobs")
+
+checks = jobs.get("checks")
+image = jobs.get("image")
+publish = jobs.get("publish")
+if not all(isinstance(job, dict) for job in (checks, image, publish)):
+    fail("Workflow jobs must use reviewed mapping definitions")
+
+checks_permissions = checks.get("permissions")
+image_permissions = image.get("permissions")
+publish_permissions = publish.get("permissions")
+for job_permissions in (checks_permissions, image_permissions, publish_permissions):
+    if job_permissions == "write-all":
+        fail("permissions: write-all is forbidden at every workflow scope")
+    if job_permissions == "read-all":
+        fail("permissions: read-all is forbidden; permissions must be explicit")
+
+permission_maps = [
+    value
+    for value in (permissions, checks_permissions, image_permissions, publish_permissions)
+    if isinstance(value, dict)
+]
+if (
+    sum(mapping.get("id-token") == "write" for mapping in permission_maps) != 1
+    or not isinstance(publish_permissions, dict)
+    or publish_permissions.get("id-token") != "write"
+):
+    fail("id-token: write must be granted exactly once, to the trusted publish job")
+if (
+    sum(mapping.get("packages") == "write" for mapping in permission_maps) != 1
+    or not isinstance(publish_permissions, dict)
+    or publish_permissions.get("packages") != "write"
+):
+    fail("packages: write must be granted exactly once, to the publish job")
+
+if permissions != {"contents": "read"}:
+    fail("Top-level permissions must contain only contents: read")
+if "permissions" in checks:
+    fail("Checks job must inherit the top-level read-only permissions")
+if image_permissions != {"contents": "read"}:
+    fail("Image job permissions must contain only contents: read")
+if publish_permissions != {
+    "contents": "read",
+    "id-token": "write",
+    "packages": "write",
+}:
+    fail(
+        "Publish job permissions must contain exactly contents: read, "
+        "id-token: write, and packages: write"
+    )
+PYTHON
+}
+
 require_blocking_security_step() {
   local step_name="$1"
   local failure_reason="$2"
@@ -32,7 +150,7 @@ require_blocking_security_step() {
 
   block="$(step_block "$step_name")"
   [[ -n "$block" ]] || fail "Security-critical workflow step is missing: $step_name"
-  if grep -Eq '^[[:space:]]+continue-on-error:[[:space:]]*true[[:space:]]*$' <<< "$block"; then
+  if grep -Eq '^[[:space:]]+continue-on-error:' <<< "$block"; then
     fail "$failure_reason"
   fi
   if grep -Eq '^[[:space:]]+if:' <<< "$block"; then
@@ -40,7 +158,19 @@ require_blocking_security_step() {
   fi
 }
 
+require_blocking_job() {
+  local job_name="$1"
+  local block
+
+  block="$(job_block "$job_name")"
+  [[ -n "$block" ]] || fail "Required workflow job is missing: $job_name"
+  if grep -Eq '^    continue-on-error:' <<< "$block"; then
+    fail "${job_name^} job failures must block the workflow"
+  fi
+}
+
 [[ -f "$WORKFLOW" ]] || fail "Secure image workflow not found: $WORKFLOW"
+validate_permission_structure
 
 grep -Eq '^  pull_request:[[:space:]]*$' "$WORKFLOW" || fail "Pull request checks are required"
 grep -Eq '^  push:[[:space:]]*$' "$WORKFLOW" || fail "Push trigger is required for publication"
@@ -64,14 +194,6 @@ while IFS= read -r action; do
     fail "GitHub Actions must be pinned to a full commit SHA with a reviewed version comment: $action"
 done < <(grep -E '^[[:space:]]+uses:' "$WORKFLOW")
 
-require_literal "  contents: read" "Default repository permissions must remain read-only"
-[[ "$(grep -Fc '      packages: write' "$WORKFLOW")" -eq 1 ]] ||
-  fail "packages: write must be granted exactly once, to the publish job"
-publish_block="$(sed -n '/^  publish:$/,$p' "$WORKFLOW")"
-if [[ "$(grep -Fc '      id-token: write' <<< "$publish_block")" -ne 1 ]] ||
-  [[ "$(grep -Fc '      id-token: write' "$WORKFLOW")" -ne 1 ]]; then
-  fail "id-token: write must be granted exactly once, to the trusted publish job"
-fi
 require_literal "    if: github.event_name == 'push' && github.ref == 'refs/heads/main'" \
   "Image publication must be restricted to push events on main"
 
@@ -88,6 +210,8 @@ require_blocking_security_step \
 require_blocking_security_step \
   "Verify published image signature" \
   "Signature verification failures must block the workflow"
+require_blocking_job "image"
+require_blocking_job "publish"
 require_literal '          exit-code: "1"' "Trivy findings must fail the workflow"
 require_literal "          ignore-unfixed: false" "Unfixed vulnerabilities must not be ignored"
 require_literal "          severity: HIGH,CRITICAL" "Trivy must block HIGH and CRITICAL vulnerabilities"
@@ -126,6 +250,22 @@ require_literal "        run: ./scripts/verify-environment-images.sh" \
   "CI must run signed environment image verification"
 require_literal "      - name: Install Cosign for environment verification" \
   "CI must install reviewed Cosign before environment signature verification"
+require_literal "          fetch-depth: 0" \
+  "Pull request checks must fetch the reviewed base commit"
+require_literal "      - name: Validate ordered environment promotion" \
+  "CI must enforce ordered environment promotion"
+# The validator must match GitHub Actions expressions literally.
+# shellcheck disable=SC2016
+require_literal '          EVENT_NAME: ${{ github.event_name }}' \
+  "Promotion validation must distinguish pull request events"
+# shellcheck disable=SC2016
+require_literal '          BASE_SHA: ${{ github.event.pull_request.base.sha }}' \
+  "Promotion validation must use the reviewed pull request base SHA"
+# shellcheck disable=SC2016
+require_literal '          HEAD_SHA: ${{ github.sha }}' \
+  "Promotion validation must use the checked pull request revision"
+require_literal "        run: ./scripts/validate-promotion-diff.sh" \
+  "CI must run the promotion diff validator"
 # The validator must match the GitHub Actions expression literally.
 # shellcheck disable=SC2016
 [[ "$(grep -Fc '          cosign-release: ${{ env.COSIGN_VERSION }}' "$WORKFLOW")" -eq 2 ]] ||

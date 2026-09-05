@@ -11,6 +11,8 @@ results:
     policy: verify-signed-images
     resources:
       - signed-main-image
+      - signed-init-image
+      - signed-ephemeral-image
     result: pass
     rule: require-trusted-main-signature
   - kind: Pod

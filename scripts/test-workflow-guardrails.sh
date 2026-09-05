@@ -7,6 +7,54 @@ VALIDATOR="${SCRIPT_DIR}/validate-secure-image-workflow.sh"
 WORKFLOW="${ROOT_DIR}/.github/workflows/secure-image.yml"
 TEST_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEST_DIR"' EXIT
+YAML_CHART="${TEST_DIR}/yaml-validator"
+
+mkdir -p "${YAML_CHART}/files" "${YAML_CHART}/templates"
+printf '%s\n' \
+  'apiVersion: v2' \
+  'name: workflow-yaml-validator' \
+  'version: 0.1.0' \
+  > "${YAML_CHART}/Chart.yaml"
+# These are literal Helm template expressions, not shell expansions.
+# shellcheck disable=SC2016
+printf '%s\n' \
+  '{{- $workflow := .Files.Get "files/workflow.yml" | fromYaml }}' \
+  '{{- if hasKey $workflow "Error" }}{{ fail (get $workflow "Error") }}{{ end }}' \
+  'apiVersion: v1' \
+  'kind: ConfigMap' \
+  'metadata:' \
+  '  name: workflow-yaml-validator' \
+  > "${YAML_CHART}/templates/validate.yaml"
+
+assert_valid_workflow_yaml() {
+  local candidate="$1"
+
+  cp "$candidate" "${YAML_CHART}/files/workflow.yml"
+  helm template workflow-yaml-validator "$YAML_CHART" >/dev/null || {
+    echo "FAIL: negative fixture is not valid YAML: $candidate" >&2
+    exit 1
+  }
+}
+
+replace_job_permissions_with_scalar() {
+  local candidate="$1"
+  local job_name="$2"
+  local scalar="$3"
+  local rewritten="${candidate}.rewritten"
+
+  awk -v job_marker="  ${job_name}:" -v scalar="$scalar" '
+    $0 == job_marker { in_job = 1 }
+    in_job && $0 == "    permissions:" {
+      print "    permissions: " scalar
+      skip_entries = 1
+      next
+    }
+    skip_entries && /^      [a-z][a-z-]*: (read|write|none)$/ { next }
+    skip_entries { skip_entries = 0 }
+    { print }
+  ' "$candidate" > "$rewritten"
+  mv "$rewritten" "$candidate"
+}
 
 expect_rejected() {
   local name="$1"
@@ -15,6 +63,7 @@ expect_rejected() {
   local output
 
   echo "Testing negative case: $name"
+  assert_valid_workflow_yaml "$candidate"
 
   if output="$("$VALIDATOR" "$candidate" 2>&1)"; then
     echo "FAIL: validator accepted negative case: $name" >&2
@@ -32,6 +81,7 @@ expect_rejected() {
   echo "PASS: $name"
 }
 
+assert_valid_workflow_yaml "$WORKFLOW"
 "$VALIDATOR" "$WORKFLOW"
 
 cp "$WORKFLOW" "${TEST_DIR}/missing-scheduled-scan.yml"
@@ -90,6 +140,98 @@ expect_rejected \
   "${TEST_DIR}/unpinned-action.yml" \
   "GitHub Actions must be pinned to a full commit SHA"
 
+cp "$WORKFLOW" "${TEST_DIR}/top-level-write-all.yml"
+sed -i '/^permissions:$/ { N; s/^permissions:\n  contents: read$/permissions: write-all/; }' \
+  "${TEST_DIR}/top-level-write-all.yml"
+expect_rejected \
+  "top-level write-all permissions" \
+  "${TEST_DIR}/top-level-write-all.yml" \
+  "permissions: write-all is forbidden at every workflow scope"
+
+cp "$WORKFLOW" "${TEST_DIR}/checks-write-all.yml"
+sed -i '/^    name: Application and chart checks$/a\    permissions: write-all' \
+  "${TEST_DIR}/checks-write-all.yml"
+expect_rejected \
+  "checks job write-all permissions" \
+  "${TEST_DIR}/checks-write-all.yml" \
+  "permissions: write-all is forbidden at every workflow scope"
+
+cp "$WORKFLOW" "${TEST_DIR}/image-write-all.yml"
+replace_job_permissions_with_scalar \
+  "${TEST_DIR}/image-write-all.yml" \
+  image \
+  write-all
+expect_rejected \
+  "image job write-all permissions" \
+  "${TEST_DIR}/image-write-all.yml" \
+  "permissions: write-all is forbidden at every workflow scope"
+
+cp "$WORKFLOW" "${TEST_DIR}/publish-write-all.yml"
+replace_job_permissions_with_scalar \
+  "${TEST_DIR}/publish-write-all.yml" \
+  publish \
+  write-all
+expect_rejected \
+  "publish job write-all permissions" \
+  "${TEST_DIR}/publish-write-all.yml" \
+  "permissions: write-all is forbidden at every workflow scope"
+
+cp "$WORKFLOW" "${TEST_DIR}/top-level-read-all.yml"
+sed -i '/^permissions:$/ { N; s/^permissions:\n  contents: read$/permissions: read-all/; }' \
+  "${TEST_DIR}/top-level-read-all.yml"
+expect_rejected \
+  "implicit read-all permissions" \
+  "${TEST_DIR}/top-level-read-all.yml" \
+  "permissions: read-all is forbidden; permissions must be explicit"
+
+cp "$WORKFLOW" "${TEST_DIR}/checks-contents-write.yml"
+sed -i '/^    name: Application and chart checks$/a\    permissions:\n      contents: write' \
+  "${TEST_DIR}/checks-contents-write.yml"
+expect_rejected \
+  "checks job contents write permission" \
+  "${TEST_DIR}/checks-contents-write.yml" \
+  "Checks job must inherit the top-level read-only permissions"
+
+cp "$WORKFLOW" "${TEST_DIR}/image-actions-write.yml"
+sed -i '/^  image:$/,/^  publish:$/ s/^      contents: read$/&\n      actions: write/' \
+  "${TEST_DIR}/image-actions-write.yml"
+expect_rejected \
+  "image job additional actions write permission" \
+  "${TEST_DIR}/image-actions-write.yml" \
+  "Image job permissions must contain only contents: read"
+
+cp "$WORKFLOW" "${TEST_DIR}/publish-issues-write.yml"
+sed -i '/^  publish:$/,$ s/^      packages: write$/&\n      issues: write/' \
+  "${TEST_DIR}/publish-issues-write.yml"
+expect_rejected \
+  "publish job additional issues write permission" \
+  "${TEST_DIR}/publish-issues-write.yml" \
+  "Publish job permissions must contain exactly contents: read, id-token: write, and packages: write"
+
+cp "$WORKFLOW" "${TEST_DIR}/unreviewed-job-write.yml"
+sed -i '/^  image:$/i\  unreviewed:\n    runs-on: ubuntu-24.04\n    permissions:\n      issues: write\n    steps:\n      - run: "true"\n' \
+  "${TEST_DIR}/unreviewed-job-write.yml"
+expect_rejected \
+  "additional write permission in an unreviewed job" \
+  "${TEST_DIR}/unreviewed-job-write.yml" \
+  "Workflow must contain exactly the reviewed checks, image, and publish jobs"
+
+cp "$WORKFLOW" "${TEST_DIR}/inline-unreviewed-job-write.yml"
+sed -i '/^  image:$/i\  unreviewed:\n    runs-on: ubuntu-24.04\n    permissions: {issues: write}\n    steps:\n      - run: "true"\n' \
+  "${TEST_DIR}/inline-unreviewed-job-write.yml"
+expect_rejected \
+  "inline write permission in an unreviewed job" \
+  "${TEST_DIR}/inline-unreviewed-job-write.yml" \
+  "Workflow must contain exactly the reviewed checks, image, and publish jobs"
+
+cp "$WORKFLOW" "${TEST_DIR}/inline-image-write.yml"
+sed -i '/^  image:$/,/^  publish:$/ { /^    permissions:$/ { N; s/^    permissions:\n      contents: read$/    permissions: {contents: write}/; } }' \
+  "${TEST_DIR}/inline-image-write.yml"
+expect_rejected \
+  "inline contents write permission in image job" \
+  "${TEST_DIR}/inline-image-write.yml" \
+  "Image job permissions must contain only contents: read"
+
 cp "$WORKFLOW" "${TEST_DIR}/non-blocking-scan.yml"
 sed -i 's/exit-code: "1"/exit-code: "0"/' "${TEST_DIR}/non-blocking-scan.yml"
 expect_rejected \
@@ -120,6 +262,43 @@ expect_rejected \
   "continue-on-error on signature verification" \
   "${TEST_DIR}/continue-on-error-verification.yml" \
   "Signature verification failures must block the workflow"
+
+for security_step in \
+  "Scan image for high and critical vulnerabilities" \
+  "Sign published image identity" \
+  "Verify published image signature"; do
+  case_name="$(tr '[:upper:] ' '[:lower:]-' <<< "$security_step")"
+  candidate="${TEST_DIR}/expression-continue-${case_name}.yml"
+  cp "$WORKFLOW" "$candidate"
+  # The mutation targets the literal GitHub Actions expression.
+  # shellcheck disable=SC2016
+  sed -i "/name: ${security_step}/a\\        continue-on-error: \${{ true }}" "$candidate"
+  case "$security_step" in
+    "Scan image for high and critical vulnerabilities")
+      expected_reason="Trivy scan failures must block the workflow"
+      ;;
+    "Sign published image identity")
+      expected_reason="Cosign signing failures must block the workflow"
+      ;;
+    "Verify published image signature")
+      expected_reason="Signature verification failures must block the workflow"
+      ;;
+  esac
+  expect_rejected \
+    "expression-based continue-on-error: ${security_step}" \
+    "$candidate" \
+    "$expected_reason"
+done
+
+for job_name in image publish; do
+  candidate="${TEST_DIR}/continue-on-error-${job_name}-job.yml"
+  cp "$WORKFLOW" "$candidate"
+  sed -i "/^  ${job_name}:$/a\\    continue-on-error: true" "$candidate"
+  expect_rejected \
+    "continue-on-error on ${job_name} job" \
+    "$candidate" \
+    "${job_name^} job failures must block the workflow"
+done
 
 for security_step in \
   "Scan image for high and critical vulnerabilities" \
@@ -198,6 +377,21 @@ expect_rejected \
   "${TEST_DIR}/missing-image-verification.yml" \
   "CI must run signed environment image verification"
 
+cp "$WORKFLOW" "${TEST_DIR}/missing-promotion-diff-validation.yml"
+sed -i '/      - name: Validate ordered environment promotion/,/      - name: Set up Go/{/      - name: Set up Go/!d;}' \
+  "${TEST_DIR}/missing-promotion-diff-validation.yml"
+expect_rejected \
+  "missing ordered promotion validation" \
+  "${TEST_DIR}/missing-promotion-diff-validation.yml" \
+  "CI must enforce ordered environment promotion"
+
+cp "$WORKFLOW" "${TEST_DIR}/shallow-promotion-checkout.yml"
+sed -i '0,/fetch-depth: 0/s//fetch-depth: 1/' "${TEST_DIR}/shallow-promotion-checkout.yml"
+expect_rejected \
+  "pull request base commit unavailable" \
+  "${TEST_DIR}/shallow-promotion-checkout.yml" \
+  "Pull request checks must fetch the reviewed base commit"
+
 cp "$WORKFLOW" "${TEST_DIR}/missing-environment-cosign.yml"
 sed -i '/name: Install Cosign for environment verification/,+3d' \
   "${TEST_DIR}/missing-environment-cosign.yml"
@@ -231,6 +425,16 @@ expect_rejected \
   "signing OIDC permission outside the publish job" \
   "${TEST_DIR}/signing-oidc-outside-publish.yml" \
   "id-token: write must be granted exactly once, to the trusted publish job"
+
+cp "$WORKFLOW" "${TEST_DIR}/package-permission-outside-publish.yml"
+sed -i '/^[[:space:]]*packages: write$/d' \
+  "${TEST_DIR}/package-permission-outside-publish.yml"
+sed -i '/name: Application and chart checks/a\    permissions:\n      contents: read\n      packages: write' \
+  "${TEST_DIR}/package-permission-outside-publish.yml"
+expect_rejected \
+  "packages write permission outside the publish job" \
+  "${TEST_DIR}/package-permission-outside-publish.yml" \
+  "packages: write must be granted exactly once, to the publish job"
 
 cp "$WORKFLOW" "${TEST_DIR}/signing-tag-instead-of-digest.yml"
 # The mutation targets literal workflow shell expressions.
