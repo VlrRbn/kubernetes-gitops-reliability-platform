@@ -129,6 +129,7 @@ kubectl
 kind
 Helm 3 or newer
 Go 1.26+ or Docker for Go checks
+Python 3
 curl
 jq
 ```
@@ -283,9 +284,10 @@ boundary is documented in
 ## Safety Boundary
 
 The local demo and control-plane bootstraps operate only on a kind cluster named
-`gitops-reliability`; they do not push images, access AWS, or deploy cloud
-infrastructure. GHCR publication happens only in GitHub Actions after a commit
-reaches `main`.
+`gitops-reliability` by default; an explicit `CLUSTER_NAME` override selects a
+different local kind cluster. They do not push images, access AWS, or deploy
+cloud infrastructure. GHCR publication happens only in GitHub Actions after a
+commit reaches `main`.
 
 The automated recovery drill is restricted to one Pod in `dev` and requires
 explicit operator confirmation. The application's configurable delay, error,
