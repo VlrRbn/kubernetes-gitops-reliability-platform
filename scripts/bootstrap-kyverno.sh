@@ -10,6 +10,9 @@ KYVERNO_CHART_VERSION="3.8.2"
 KYVERNO_CHART_SHA256="7a9bdaeba4334337b7ff231baad1ec2044429893008a00bf398933bc033abc8e"
 KYVERNO_CHART="oci://ghcr.io/kyverno/charts/kyverno"
 POLICY_DIR="${ROOT_DIR}/platform/kyverno/policies"
+POLICY_VALIDATOR="${SCRIPT_DIR}/validate-admission-policy-boundaries.sh"
+AUDIT_REPORT_VALIDATOR="${SCRIPT_DIR}/validate-kyverno-audit-reports.sh"
+AUDIT_POLICY_CLEANER="${SCRIPT_DIR}/cleanup-kyverno-audit-policies.sh"
 VALUES_FILE="${ROOT_DIR}/platform/kyverno/values.yaml"
 WORK_DIR="$(mktemp -d)"
 CHART_FILE="${WORK_DIR}/kyverno-${KYVERNO_CHART_VERSION}.tgz"
@@ -17,6 +20,9 @@ RENDERED_FILE="${WORK_DIR}/kyverno-rendered.yaml"
 AUDIT_DIR="${WORK_DIR}/audit-policies"
 AUDIT_POLICY_NAMES=()
 AUDIT_APPLIED=false
+EXPECTED_WORKLOADS_FILE="${WORK_DIR}/expected-workloads.json"
+REPORTS_FILE="${WORK_DIR}/policy-reports.json"
+AUDIT_STARTED_EPOCH=""
 
 step() {
   printf '\n==> %s\n' "$1"
@@ -26,18 +32,7 @@ cleanup() {
   local status="$?"
   trap - EXIT
   if [[ "$AUDIT_APPLIED" == true ]]; then
-    if ! kubectl delete clusterpolicy "${AUDIT_POLICY_NAMES[@]}" \
-      --ignore-not-found >/dev/null; then
-      echo "CRITICAL: failed to remove temporary Audit policies" >&2
-      status=1
-    else
-      for policy_name in "${AUDIT_POLICY_NAMES[@]}"; do
-        if kubectl get clusterpolicy "$policy_name" >/dev/null 2>&1; then
-          echo "CRITICAL: temporary Audit policy still exists: $policy_name" >&2
-          status=1
-        fi
-      done
-    fi
+    "$AUDIT_POLICY_CLEANER" "${AUDIT_POLICY_NAMES[@]}" || status=1
   fi
   rm -rf "$WORK_DIR"
   exit "$status"
@@ -45,7 +40,7 @@ cleanup() {
 trap cleanup EXIT
 
 step "Checking prerequisites and Kubernetes context"
-for command in helm jq kubectl sha256sum; do
+for command in date helm jq kubectl sha256sum; do
   command -v "$command" >/dev/null 2>&1 || {
     echo "Required command is missing: $command" >&2
     exit 1
@@ -57,6 +52,9 @@ current_context="$(kubectl config current-context)"
   echo "Refusing to bootstrap Kyverno into context '$current_context'; expected '$EXPECTED_CONTEXT'" >&2
   exit 1
 }
+
+step "Validating the managed admission policy boundary"
+"$POLICY_VALIDATOR" "$POLICY_DIR"
 
 for namespace in dev stage prod; do
   kubectl get namespace "$namespace" >/dev/null || {
@@ -181,51 +179,46 @@ audit_actions="$(grep -Rh 'failureAction: Audit' "$AUDIT_DIR" | wc -l)"
 
 step "Auditing existing dev, stage, and prod workloads"
 AUDIT_APPLIED=true
+AUDIT_STARTED_EPOCH="$(date --utc '+%s')"
 kubectl apply --filename "$AUDIT_DIR"
+
+for namespace in dev stage prod; do
+  kubectl get deployment,replicaset,pod \
+    --namespace "$namespace" \
+    --output=json
+done | jq --slurp '{items: [.[].items[]]}' > "$EXPECTED_WORKLOADS_FILE"
+
+jq --exit-status '.items | length > 0' "$EXPECTED_WORKLOADS_FILE" >/dev/null || {
+  echo "Refusing to enforce admission policies: no managed workloads were found" >&2
+  exit 1
+}
 
 reports_ready=false
 for _ in $(seq 1 60); do
-  reports="$(kubectl get policyreport --all-namespaces --output=json)"
-  reports_ready=true
-  for namespace in dev stage prod; do
-    for policy in "${AUDIT_POLICY_NAMES[@]}"; do
-      if ! jq -e \
-        --arg namespace "$namespace" \
-        --arg policy "$policy" \
-        '[.items[] | select(.metadata.namespace == $namespace) | .results[]? | select(.policy == $policy)] | length > 0' \
-        >/dev/null <<< "$reports"; then
-        reports_ready=false
-      fi
-    done
-  done
-  [[ "$reports_ready" == true ]] && break
+  kubectl get policyreport --all-namespaces --output=json > "$REPORTS_FILE"
+  set +e
+  audit_output="$("$AUDIT_REPORT_VALIDATOR" \
+    "$EXPECTED_WORKLOADS_FILE" \
+    "$REPORTS_FILE" \
+    "$AUDIT_STARTED_EPOCH" \
+    "${AUDIT_POLICY_NAMES[@]}" 2>&1)"
+  audit_status="$?"
+  set -e
+  if [[ "$audit_status" -eq 0 ]]; then
+    reports_ready=true
+    break
+  fi
+  if [[ "$audit_status" -eq 1 ]]; then
+    printf '%s\n' "$audit_output" >&2
+    echo "Refusing to enforce admission policies: live workload audit was not clean" >&2
+    exit 1
+  fi
   sleep 2
 done
 
 if [[ "$reports_ready" != true ]]; then
+  printf '%s\n' "$audit_output" >&2
   echo "Timed out waiting for Kyverno background audit reports" >&2
-  exit 1
-fi
-
-failures=0
-for policy in "${AUDIT_POLICY_NAMES[@]}"; do
-  policy_failures="$(jq --arg policy "$policy" '[
-    .items[].results[]?
-    | select(.result == "fail" and .policy == $policy)
-  ] | length' <<< "$reports")"
-  failures="$((failures + policy_failures))"
-done
-if [[ "$failures" -ne 0 ]]; then
-  for policy in "${AUDIT_POLICY_NAMES[@]}"; do
-    jq -r --arg policy "$policy" '
-      .items[] as $report
-      | $report.results[]?
-      | select(.result == "fail" and .policy == $policy)
-      | "FAIL: \($report.metadata.namespace)/\($report.scope.kind)/\($report.scope.name): \(.policy)/\(.rule): \(.message)"
-    ' <<< "$reports" >&2
-  done
-
-  echo "Refusing to enforce admission policies: live workload audit found $failures failure(s)" >&2
   exit 1
 fi
 

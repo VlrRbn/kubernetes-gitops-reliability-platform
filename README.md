@@ -67,8 +67,8 @@ its trusted signature before changing an environment values file. It then
 enforces the order `dev → stage → prod`; each environment change remains a
 separate PR. Failed or unverifiable signatures leave the target file unchanged.
 The restricted AppProject denies cluster-scoped resources and permits only the
-chart's `Deployment` and `Service` resources. See
-`docs/gitops-promotion.md` for bootstrap, promotion, and deletion trade-offs.
+chart's `Deployment`, `Service`, and `ServiceMonitor` resources.
+See `docs/gitops-promotion.md` for bootstrap, promotion, and deletion trade-offs.
 
 ## Admission Policy
 
@@ -77,9 +77,10 @@ Kubernetes restricted Pod Security Standard or use writable root filesystems
 in the Argo-managed environments. It also verifies that every workload image
 was signed by `secure-image.yml` on protected `main`. Kyverno `v1.18.2`, Helm
 chart `3.8.2`, its controller images, and the test CLI are pinned and verified.
-Bootstrap audits newly introduced policies against live workloads before
-switching them to `Enforce`; see
-`docs/admission-policy.md` for the contract and acceptance procedure.
+Bootstrap audits newly introduced policies against every live Deployment,
+ReplicaSet, and Pod before switching them to `Enforce`.
+Missing results or any non-pass outcome fail closed;
+see `docs/admission-policy.md` for the contract and acceptance procedure.
 
 ## Observability And SLOs
 

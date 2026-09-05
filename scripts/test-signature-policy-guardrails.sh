@@ -70,7 +70,7 @@ expect_rejected "wildcard signer issuer" "$TEST_DIR/wildcard-issuer.yaml" \
   "Signer issuer must be restricted to GitHub Actions OIDC"
 
 cp "$POLICY" "$TEST_DIR/skipped-images.yaml"
-sed -i '/imageReferences:/i\          skipImageReferences:\n            - "ghcr.io/example/**"' \
+sed -i '/            - "\*"/a\          skipImageReferences:\n            - "ghcr.io/example/**"' \
   "$TEST_DIR/skipped-images.yaml"
 expect_rejected "signature verification exclusion" "$TEST_DIR/skipped-images.yaml" \
   "Signature verification exclusions are forbidden"
