@@ -197,7 +197,7 @@ done < <(grep -E '^[[:space:]]+uses:' "$WORKFLOW")
 require_literal "    if: github.event_name == 'push' && github.ref == 'refs/heads/main'" \
   "Image publication must be restricted to push events on main"
 
-require_literal "  GO_VERSION: 1.26.6" "Go must be pinned to the reviewed version 1.26.6"
+require_literal "  GO_VERSION: 1.26.9" "Go must be pinned to the reviewed version 1.26.9"
 require_literal "  TRIVY_VERSION: v0.73.0" "Trivy must be pinned to the reviewed version v0.73.0"
 require_literal "  SYFT_VERSION: v1.50.0" "Syft must be pinned to the reviewed version v1.50.0"
 require_literal "  COSIGN_VERSION: v2.6.5" "Cosign must be pinned to the reviewed Kyverno-compatible version v2.6.5"
