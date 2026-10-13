@@ -39,7 +39,7 @@ test against a stable Kyverno release.
 
 ## Continuous Vulnerability Re-evaluation
 
-The same pinned build and Trivy scan runs every day at `06:00 UTC` and can be
+The same pinned build and Trivy scan runs every Monday at `06:30 UTC` and can be
 started manually with `workflow_dispatch`. Trivy remains pinned to the reviewed
 binary version while its vulnerability database is refreshed, allowing newly
 published `HIGH` or `CRITICAL` findings in the current `main` binary to fail CI

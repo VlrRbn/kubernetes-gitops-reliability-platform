@@ -175,7 +175,7 @@ validate_permission_structure
 grep -Eq '^  pull_request:[[:space:]]*$' "$WORKFLOW" || fail "Pull request checks are required"
 grep -Eq '^  push:[[:space:]]*$' "$WORKFLOW" || fail "Push trigger is required for publication"
 grep -Eq '^  schedule:[[:space:]]*$' "$WORKFLOW" || fail "Scheduled vulnerability scans are required"
-require_literal '    - cron: "0 6 * * *"' "Scheduled vulnerability scans must run daily at 06:00 UTC"
+require_literal '    - cron: "30 6 * * 1"' "Scheduled vulnerability scans must run weekly on Mondays at 06:30 UTC"
 grep -Eq '^  workflow_dispatch:[[:space:]]*$' "$WORKFLOW" || fail "Manual vulnerability scans are required"
 require_literal "      - main" "Push publication must target main only"
 grep -Fq 'pull_request_target:' "$WORKFLOW" && fail "pull_request_target is forbidden for untrusted changes"
