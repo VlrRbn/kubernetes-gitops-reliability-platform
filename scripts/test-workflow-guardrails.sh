@@ -118,12 +118,12 @@ expect_rejected \
   "Trusted main publication must not be cancellable"
 
 cp "$WORKFLOW" "${TEST_DIR}/outdated-go-version.yml"
-sed -i 's/GO_VERSION: 1.26.9/GO_VERSION: 1.26.8/' \
+sed -i 's/GO_VERSION: 1.26.10/GO_VERSION: 1.26.9/' \
   "${TEST_DIR}/outdated-go-version.yml"
 expect_rejected \
   "outdated vulnerable Go version" \
   "${TEST_DIR}/outdated-go-version.yml" \
-  "Go must be pinned to the reviewed version 1.26.9"
+  "Go must be pinned to the reviewed version 1.26.10"
 
 cp "$WORKFLOW" "${TEST_DIR}/incompatible-cosign-version.yml"
 sed -i 's/COSIGN_VERSION: v2.6.5/COSIGN_VERSION: v3.1.3/' \
