@@ -44,8 +44,11 @@ identity and GitHub OIDC issuer. This verification is read-only and does not
 receive `id-token: write`.
 A separate job publishes the exact reviewed image only after the commit reaches `main`.
 Images use `sha-<full-commit-sha>` tags; the pipeline does not publish `latest`.
-The same pinned scan runs daily with a refreshed vulnerability database so new
+The same pinned scan runs weekly with a refreshed vulnerability database so new
 findings are reported even when no pull request is open.
+
+Dependabot checks GitHub Actions and Go modules weekly, grouping minor and
+patch updates into pull requests for review through the same pipeline.
 
 The publish job alone receives `packages: write`. GitHub Actions, Go, Helm,
 Trivy, and Syft versions are pinned. See `docs/secure-image-pipeline.md`
