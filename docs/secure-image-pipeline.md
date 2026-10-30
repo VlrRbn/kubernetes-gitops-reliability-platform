@@ -51,6 +51,30 @@ cannot cancel an in-progress pull-request check or trusted publication run.
 Only superseded pull-request runs are cancellable. A trusted publication that
 has started on `main` is never cancelled by a newer commit.
 
+## Automated Dependency Updates
+
+`.github/dependabot.yml` checks GitHub Actions and the Go modules in `/app`
+every Monday at `09:00 Europe/Dublin`. Minor and patch version updates are
+grouped by ecosystem; major version updates remain separate for review.
+Each ecosystem allows up to three open version-update pull requests. This
+limit and weekly schedule do not delay Dependabot security updates.
+
+Repository setup also requires the dependency graph, Dependabot alerts, and
+Dependabot security updates to be enabled in GitHub settings. Version updates
+start when the configuration reaches the default branch, `main`.
+
+Dependency pull requests require review and the existing project checks,
+signature verification, image build, and Trivy scan. No automatic merge
+workflow is configured. Action updates must retain full commit SHAs and
+reviewed version comments.
+
+Docker updates are deferred until Go version pins can be synchronized across
+the Dockerfile, workflow, local-check script, and guardrail tests. Go toolchain
+and other tool versions stored in workflow variables or shell scripts still
+require coordinated manual updates. Cosign upgrades must also preserve the
+reviewed Kyverno compatibility contract. The scheduled Trivy scan continues
+to detect newly disclosed vulnerabilities in the built application.
+
 ## Evidence And Retention
 
 - The SPDX JSON SBOM is retained as a workflow artifact for 14 days.
